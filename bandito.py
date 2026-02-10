@@ -10,12 +10,20 @@ def load_modules():
     for filename in os.listdir(module_dir):
         if filename.endswith(".py") and not filename.startswith("__"):
             module_name = filename[:-3]
-            module = __import__(f"modules.{module_name}", fromlist=[""])
-            MODULES[module_name] = module.Module()   # Every module must have a "Module" class
+            try:    
+                module = __import__(f"modules.{module_name}", fromlist=[""])
+                if hasattr(module, "Module"):    
+                    MODULES[module_name] = module.Module()   # Every module must have a "Module" class
+                    print(f"[+] Loaded module: {module_name}")
+                else:
+                    print(f"[-] {filename} has no 'Module' class")
+            except Exception as e:
+                print(f"[-] Failed to load {filename}: {e}")
 
+                
 def main():
     print_banner()
-    print(colored("[*] Bandito Framework v1.0 - Educational Exploitation Tool", "green"))
+    print(colored("[*] Bandito Framework", "green"))
     print(colored("[*] Type 'help' for commands\n", "yellow"))
 
     load_modules()
@@ -34,7 +42,7 @@ def main():
                 print("  use <module>     - Select a module (e.g. use cmd_injection)")
                 print("  show modules     - List available modules")
                 print("  show options     - Show current module options")
-                print("  set <option> <value> - Set option (e.g. set target http://192.168.163.128)")
+                print("  set <option> <value> - Set option (e.g. set target http://192.168.x.x)")
                 print("  run / exploit    - Run the selected module")
                 print("  back             - Unload current module")
                 print("  exit / quit      - Exit framework\n")
