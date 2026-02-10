@@ -68,3 +68,13 @@ def colored(text, color):
     }
     reset = "\033[0m"
     return colors.get(color, "") + text + reset
+
+shared_session = None
+
+def get_session():
+    global shared_session
+    return shared_session
+
+def set_session(sess):
+    global shared_session
+    shared_session = sess
