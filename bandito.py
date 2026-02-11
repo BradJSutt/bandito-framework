@@ -45,56 +45,58 @@ def main():
     current_tool = None
 
     while True:
-        try:
-            prompt = f"bandito ({current_tool.name if current_tool else 'no tool'}) > "
-            cmd = input(prompt).strip()
+        prompt = f"bandito ({current_tool.name if current_tool else 'no tool'}) > "
+        cmd = input(prompt).strip()
 
-            if not cmd:
-                continue
+        if not cmd:
+            continue
 
-            low = cmd.lower()
+        low = cmd.lower()
 
-            if low in ["exit", "quit"]:
-                print(colored("[*] Goodbye!", "red"))
-                break
+        # If a tool is selected, let the tool handle these first
+        # (so submodule selection works: "use cmd_injection", and tool-specific help can exist later)
+        if current_tool and (low == "help" or low.startswith("use ") or low == "show options"):
+            current_tool.handle_command(cmd)
+            continue
 
-            elif low == "help":
-                print("\nCommands:")
-                print(" use <tool> - Select a tool (e.g. use web_exploit)")
-                print(" show tools - List available tools")
-                print(" show options - Show current tool options (if applicable)")
-                print(" back - Return to main menu")
-                print(" exit / quit - Exit framework\n")
+        # Global / framework-level commands
+        if low in ["exit", "quit"]:
+            print(colored("[*] Goodbye!", "red"))
+            break
 
-            elif low == "show tools":
-                print("Available tools:")
-                for t in MODULES.keys():
-                    print(f" - {t}")
+        if low == "help":
+            print("\nCommands:")
+            print(" use <tool> - Select a tool (e.g. use web_exploit)")
+            print(" show tools - List available tools")
+            print(" show options - Show current tool options (if applicable)")
+            print(" back - Return to main menu")
+            print(" exit / quit - Exit framework\n")
+            continue
 
-            elif low.startswith("use "):
-                tool_name = low.split()[1]
-                if tool_name in MODULES:
-                    current_tool = MODULES[tool_name]
-                    print(colored(f"[+] Tool loaded: {tool_name}", "green"))
-                else:
-                    print(colored(f"[-] Tool '{tool_name}' not found", "red"))
+        if low == "show tools":
+            print("Available tools:")
+            for t in MODULES.keys():
+                print(f" - {t}")
+            continue
 
-            elif low == "back":
-                current_tool = None
-
-            elif current_tool:
-                # Important: pass the raw command, not forced-lowercase,
-                # so submodules can accept arguments without case damage.
-                current_tool.handle_command(cmd)
-
+        if low.startswith("use "):
+            tool_name = low.split()[1]
+            if tool_name in MODULES:
+                current_tool = MODULES[tool_name]
+                print(colored(f"[+] Tool loaded: {tool_name}", "green"))
             else:
-                print(colored("[-] No tool selected. Use 'use <tool>' first", "red"))
+                print(colored(f"[-] Tool '{tool_name}' not found", "red"))
+            continue
 
-        except KeyboardInterrupt:
-            print("\n")
-        except Exception as e:
-            print(f"[-] Error: {e}")
+        if low == "back":
+            current_tool = None
+            continue
 
+        # Default: if a tool is selected, pass through; otherwise error
+        if current_tool:
+            current_tool.handle_command(cmd)
+        else:
+            print(colored("[-] No tool selected. Use 'use <tool>' first", "red"))
 
 if __name__ == "__main__":
     main()
