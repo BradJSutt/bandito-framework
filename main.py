@@ -1,6 +1,7 @@
 import requests
 from datetime import datetime
 import os
+###################
 
 class Tool:
     def __init__(self):
@@ -63,8 +64,6 @@ class Tool:
             sub_name = cmd.split()[1]
             if sub_name in self.sub_modules:
                 print(f"[+] Using sub-module: {sub_name}")
-                # Here you can switch to sub-module prompt or run its commands
-                # For simplicity, we'll just call its show_options
                 self.sub_modules[sub_name].show_options()
             else:
                 print(f"[-] Sub-module '{sub_name}' not found")
@@ -113,5 +112,5 @@ class Tool:
         self.session.post(sec_url, data={"security": "low", "seclev_submit": "Submit"})
 
         self.logged_in = True
-        self.load_sub_modules()  # Load sub-modules after login
+        self.load_sub_modules()
         print("[+] Web Exploit ready. Use 'use cmd_injection', 'use file_upload', etc.")
