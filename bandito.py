@@ -37,15 +37,16 @@ def load_modules():
 
 
 def main():
+    cmatrix_loading()
     print_banner()
-    print(colored("[*] Bandito Framework v1.0 - Educational Exploitation Tool", "green"))
+    print(colored("[*] Bandito Framework v1.0", "dark_red"))
     print(colored("[*] Type 'help' for commands\n", "yellow"))
 
     load_modules()
     current_tool = None
 
     while True:
-        prompt = f"bandito ({current_tool.name if current_tool else 'no tool'}) > "
+        prompt = colored(f"bandito (dvwa_web) > ", "red")
         cmd = input(prompt).strip()
 
         if not cmd:

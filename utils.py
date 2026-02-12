@@ -1,4 +1,7 @@
-# utils.py
+import time
+import random
+import sys
+
 
 def print_banner():
     banner = r"""                                                                                                    
@@ -61,13 +64,16 @@ def print_banner():
     Version: v1.0
 
 """
-    print("\033[91m" + banner + "\033[0m")
+print(colored(banner, "dark_red"))
 
 def colored(text, color):
     colors = {
-        "green":  "\033[92m",
-        "red":    "\033[91m",
+        "dark_red": "\033[31m",
+        "red": "\033[91m",
+        "green": "\033[92m",
         "yellow": "\033[93m",
+        "orange": "\033[38;5;208m",
+        "reset": "\033[0m"
     }
     reset = "\033[0m"
     return colors.get(color, "") + text + reset
@@ -81,3 +87,36 @@ def get_session():
 def set_session(sess):
     global shared_session
     shared_session = sess
+
+def cmatrix_loading():
+    print("\n" * 5)
+    print("Initializing Bandito Framework...")
+    print("")
+
+    chars = "01"
+    width = 80
+    height = 20
+
+    columns = [0] * width
+
+    for _ in range(60):  # duration of animation
+        for i in range(width):
+            if columns[i] == 0:
+                if random.random() < 0.05:
+                    columns[i] = random.randint(1, height)
+            else:
+                columns[i] -= 1
+
+        line = ""
+        for col in columns:
+            if col > 0:
+                line += random.choice(chars)
+            else:
+                line += " "
+        print("\033[32m" + line + "\033[0m")  # green matrix
+        time.sleep(0.05)
+        print("\033[F" * height, end="")  # move cursor up
+
+    print("\033[0m" + "\n" * 2)
+    print("Bandito Framework v1.0 loaded.")
+    print("")
