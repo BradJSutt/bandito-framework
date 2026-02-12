@@ -1,99 +1,116 @@
+# bandito.py
 import os
-from utils import print_banner, colored, cmatrix_loading
+import importlib
+
+from utils import printbanner, colored, cmatrixloading, printcolored, ok, info, warn, fail
 
 MODULES = {}
 
-def load_modules():
+def loadmodules():
     global MODULES
     MODULES = {}
-    tools_dir = "tools"
+    toolsdir = "tools"
+    info("Scanning tools directory...")
 
-    print("[DEBUG] Scanning tools directory...")
-
-    if not os.path.isdir(tools_dir):
-        print("[-] tools/ directory not found!")
+    if not os.path.isdir(toolsdir):
+        fail("tools directory not found!")
         return
 
-    for tool_name in os.listdir(tools_dir):
-        tool_path = os.path.join(tools_dir, tool_name)
-        if os.path.isdir(tool_path) and not tool_name.startswith("__"):
-            main_file = os.path.join(tool_path, "main.py")
-            if os.path.isfile(main_file):
-                try:
-                    module = __import__(f"tools.{tool_name}.main", fromlist=[""])
-                    if hasattr(module, "Tool"):
-                        MODULES[tool_name] = module.Tool()
-                        print(colored(f"[+] Loaded tool: {tool_name}", "green"))
-                    else:
-                        print(f"[-] {tool_name}/main.py has no 'Tool' class")
-                except Exception as e:
-                    print(f"[-] Failed to load {tool_name}: {e}")
+    for toolname in os.listdir(toolsdir):
+        toolpath = os.path.join(toolsdir, toolname)
+        if not os.path.isdir(toolpath):
+            continue
+        if toolname.startswith("__"):
+            continue
+
+        mainfile = os.path.join(toolpath, "main.py")
+        if not os.path.isfile(mainfile):
+            continue
+
+        try:
+            module = importlib.import_module(f"tools.{toolname}.main")
+            if hasattr(module, "Tool"):
+                MODULES[toolname] = module.Tool()
+                ok(f"Loaded tool {toolname}")
+            else:
+                warn(f"{toolname}/main.py has no Tool class")
+        except Exception as e:
+            fail(f"Failed to load tool {toolname}: {e}")
 
 def main():
-    cmatrix_loading()
-    print_banner()
-    print(colored("[*] Bandito Framework v1.0 - Educational Exploitation Tool", "dark_red"))
-    print(colored("[*] Type 'help' for commands\n", "yellow"))
+    cmatrixloading()
+    printbanner()
+    printcolored("Bandito Framework v1.0 - Educational Exploitation Tool", "darkred")
+    printcolored("Type help for commands", "yellow")
+    loadmodules()
 
-    load_modules()
-    current_tool = None
+    currenttool = None
 
     while True:
         try:
-            prompt = colored(f"bandito ({current_tool.name if current_tool else 'no tool'}) > ", "red")
+            prompt = colored(f"bandito({currenttool.name if currenttool else 'no tool'}) > ", "red")
             cmd = input(prompt).strip()
-
             if not cmd:
                 continue
 
             low = cmd.lower()
 
-            # Delegate to current tool if one is active
-            if current_tool:
-                current_tool.handle_command(cmd)
+            # Global "back" always works
+            if low in ("back",):
+                if currenttool:
+                    info("Returning to main Bandito menu...")
+                currenttool = None
                 continue
 
-            # Global commands
-            if low in ["exit", "quit"]:
-                print(colored("[*] Goodbye!", "red"))
+            # If a tool is selected, give it first shot (except exit/help/show/use)
+            if currenttool and not (low in ("help", "show tools") or low.startswith("use ")):
+                # Let tool decide what "exit/quit" means in its context
+                currenttool.handlecommand(cmd)
+                continue
+
+            if low in ("exit", "quit"):
+                info("Goodbye!")
                 break
 
             if low == "help":
-                print(colored("\nCore Commands:", "yellow"))
-                print("  use <tool>       - Select a tool (e.g. use WebRCE)")
-                print("  show tools       - List available tools")
-                print("  back             - Return to main menu")
-                print("  exit / quit      - Exit framework\n")
+                printcolored("Commands:", "yellow")
+                print("  use <tool>      - Select a tool (e.g. use WebRCE)")
+                print("  show tools      - List available tools")
+                print("  back            - Return to main menu / unload tool")
+                print("  exit | quit     - Exit framework")
                 continue
 
             if low == "show tools":
-                print(colored("Available tools:", "yellow"))
+                printcolored("Available tools:", "yellow")
                 for t in MODULES.keys():
-                    print(colored(f"  - {t}", "orange"))
+                    printcolored(f" - {t}", "orange")
                 continue
 
             if low.startswith("use "):
-                tool_name = cmd.split()[1]
-                tool_key = tool_name.lower()
+                toolname = cmd.split(maxsplit=1)[1].strip()
+                # case-insensitive match
+                chosen = None
                 for key in MODULES:
-                    if key.lower() == tool_key:
-                        current_tool = MODULES[key]
-                        print(colored(f"[+] Tool loaded: {key}", "green"))
+                    if key.lower() == toolname.lower():
+                        chosen = key
                         break
-                else:
-                    print(colored(f"[-] Tool '{tool_name}' not found", "red"))
+                if not chosen:
+                    fail(f"Tool '{toolname}' not found")
+                    continue
+                currenttool = MODULES[chosen]
+                ok(f"Tool loaded: {chosen}")
+                # optional: show module help on load
+                if hasattr(currenttool, "showhelp"):
+                    currenttool.showhelp()
                 continue
 
-            if low == "back":
-                current_tool = None
-                continue
-
-            print(colored("[-] No tool selected. Use 'use <tool>' first", "red"))
+            warn("No tool selected. Use 'use <tool>' first.")
 
         except KeyboardInterrupt:
-            print("\n")
+            print()
+            warn("Interrupted (Ctrl+C). Type 'exit' to quit.")
         except Exception as e:
-            print(colored(f"[-] Error: {e}", "red"))
+            fail(f"Error: {e}")
 
 if __name__ == "__main__":
     main()
