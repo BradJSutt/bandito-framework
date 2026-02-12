@@ -77,11 +77,11 @@ def print_banner():
                                                                                        
                                                                                                                                                                            
                                                                     
-    Author: Brad Sutton                                                                
+    Author: PsiOm                                                                
     Version: v1.0
 
-"""
-print(colored(banner, "dark_red"))
+    """
+    print(colored(banner, "dark_red"))
 
 # =============================================
 # CMATRIX LOADING ANIMATION
