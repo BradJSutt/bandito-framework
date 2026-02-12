@@ -1,6 +1,7 @@
 import os
 import importlib.util
 from utils import print_banner, colored, cmatrix_loading
+from base_module import BaseModule
 
 MODULES = {}
 
