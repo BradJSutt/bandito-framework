@@ -1,5 +1,3 @@
-import requests
-import socket
 from utils import colored
 
 class BaseModule:
@@ -7,11 +5,10 @@ class BaseModule:
         self.name = "base"
         self.description = "Base module"
         self.options = {}
-        self.session = None
-        self.logged_in = False
 
     def show_options(self):
-        print(colored("\nModule options ({self.name}):", "orange"))
+        print(colored(f"\nModule options ({self.name}):", "orange"))
+
         header = f"{'Name':<15} {'Current Setting':<30} {'Required':<10} {'Description'}"
         print(colored(header, "yellow"))
         print("-" * 80)
@@ -31,14 +28,18 @@ class BaseModule:
             print(colored(f"Unknown option: {name}", "red"))
 
     def run(self):
-        print(colored("[-] run() not implemented in this module", "red"))
+        raise NotImplementedError("Module must implement run() method")
 
-    def get_local_ip(self):
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except:
-            return "127.0.0.1"
+    def handle_command(self, cmd):
+        cmd = cmd.strip().lower()
+        if cmd.startswith("set "):
+            parts = cmd.split(maxsplit=2)
+            if len(parts) == 3:
+                self.set_option(parts[1], parts[2])
+            return
+        if cmd in ["options", "show options"]:
+            self.show_options()
+            return
+        if cmd in ["back", "exit", "quit"]:
+            return
+        print(colored("Unknown command. Type 'help' for options.", "red"))
