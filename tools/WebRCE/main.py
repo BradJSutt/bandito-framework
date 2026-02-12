@@ -6,7 +6,7 @@ import webbrowser
 
 class Tool:
     def __init__(self):
-        self.name = "dvwa_web"
+        self.name = "WebRCE"
         self.target = "http://192.168.107.129"
         self.user = "admin"
         self.password = "password"
