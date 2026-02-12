@@ -1,5 +1,6 @@
 import time
 import random
+import os
 
 def colored(text, color):
     colors = {
@@ -24,29 +25,32 @@ def print_banner():
     print(colored(banner, "dark_red"))
 
 def cmatrix_loading():
-    print("\n" * 4)
+    # Clear screen and hide cursor
+    print("\033[2J\033[H\033[?25l", end="")
+
     print(colored("Initializing Bandito Framework...", "orange"))
     print("")
 
     chars = "01█▓▒░"
-    width = 90
-    height = 18
+    width = os.get_terminal_size().columns if hasattr(os, 'get_terminal_size') else 80
+    height = os.get_terminal_size().lines if hasattr(os, 'get_terminal_size') else 24
     columns = [0] * width
 
-    for _ in range(45):
+    for _ in range(35):
         line = ""
         for i in range(width):
-            if columns[i] == 0 and random.random() < 0.1:
-                columns[i] = random.randint(5, height)
+            if columns[i] == 0 and random.random() < 0.08:
+                columns[i] = random.randint(4, height // 2)
             if columns[i] > 0:
                 line += random.choice(chars)
                 columns[i] -= 1
             else:
                 line += " "
         print(colored(line, "green"))
-        time.sleep(0.04)
-        print("\033[F" * height, end="")
+        time.sleep(0.06)
 
-    print("\033[0m" + "\n" * 2)
+    # Restore cursor and final clear
+    print("\033[?25h\033[2J\033[H", end="")
+    print("\n" * 2)
     print("Bandito Framework v1.0 loaded.")
     print("")

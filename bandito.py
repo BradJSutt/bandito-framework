@@ -1,4 +1,5 @@
 import os
+import importlib.util
 from utils import print_banner, colored, cmatrix_loading
 
 MODULES = {}
@@ -6,28 +7,26 @@ MODULES = {}
 def load_modules():
     global MODULES
     MODULES = {}
-    base_path = "modules/exploits"
+    base_path = "modules/dvwa/exploits"
 
-    print("[DEBUG] Scanning modules directory...")
+    if not os.path.isdir(base_path):
+        print("[-] modules/dvwa/exploits directory not found!")
+        return
 
-    for root, dirs, files in os.walk(base_path):
-        for file in files:
-            if file.endswith(".py") and not file.startswith("__"):
-                rel_path = os.path.relpath(os.path.join(root, file), base_path)
-                module_name = rel_path.replace(os.sep, ".").replace(".py", "")
-                full_import = f"modules.exploits.{module_name}"
+    for file in os.listdir(base_path):
+        if file.endswith(".py") and not file.startswith("__"):
+            module_name = file[:-3]
+            full_path = os.path.join(base_path, file)
+            spec = importlib.util.spec_from_file_location(module_name, full_path)
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
 
-                try:
-                    module = __import__(full_import, fromlist=[""])
-                    for attr in dir(module):
-                        obj = getattr(module, attr)
-                        if isinstance(obj, type) and issubclass(obj, BaseModule) and obj is not BaseModule:
-                            instance = obj()
-                            clean_name = module_name.replace(".", "/")
-                            MODULES[clean_name] = instance
-                            print(colored(f"[+] Loaded module: {clean_name}", "green"))
-                except Exception as e:
-                    print(f"[-] Failed to load {full_import}: {e}")
+            for attr in dir(module):
+                obj = getattr(module, attr)
+                if isinstance(obj, type) and issubclass(obj, BaseModule) and obj is not BaseModule:
+                    instance = obj()
+                    MODULES[module_name] = instance
+                    print(colored(f"[+] Loaded module: {module_name}", "green"))
 
 def main():
     cmatrix_loading()
@@ -54,7 +53,7 @@ def main():
 
             if low == "help":
                 print(colored("\nCore Commands:", "yellow"))
-                print("  use <module>     - Select a module (e.g. use exploits/dvwa/rce)")
+                print("  use <module>     - Select a module (e.g. use rce)")
                 print("  show modules     - List available modules")
                 print("  back             - Return to main menu")
                 print("  exit / quit      - Exit framework\n")
@@ -67,13 +66,13 @@ def main():
                 continue
 
             if low.startswith("use "):
-                module_path = low.split()[1]
-                if module_path in MODULES:
-                    current_module = MODULES[module_path]
-                    print(colored(f"[+] Module loaded: {module_path}", "green"))
-                    current_module.show_options()
+                module_name = cmd.split()[1]
+                if module_name in MODULES:
+                    current_module = MODULES[module_name]
+                    print(colored(f"[+] Module loaded: {module_name}", "green"))
+                    current_module.show_help()
                 else:
-                    print(colored(f"[-] Module '{module_path}' not found", "red"))
+                    print(colored(f"[-] Module '{module_name}' not found", "red"))
                 continue
 
             if low == "back":
