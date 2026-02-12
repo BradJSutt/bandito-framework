@@ -89,19 +89,47 @@ class Tool:
             return
 
         print(f"[*] Starting HTTP server on http://{self.kali_ip}:{self.port}")
-        try:
-            self.server_process = subprocess.Popen(
-                ["python3", "-m", "http.server", str(self.port)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                cwd=os.path.expanduser("~")
-            )
-            print("[+] Server started successfully!")
-            print(f"    Waiting for victim redirect to: http://{self.kali_ip}:{self.port}")
-        except Exception as e:
-            print(f"[-] Failed to start server: {e}")
-            print("    Try manually: python3 -m http.server 8080")
 
+        server_cmd = f"python3 -m http.server {self.port}"
+
+        opened = False
+
+        # Try gnome-terminal
+        try:
+            subprocess.Popen(["gnome-terminal", "--", "bash", "-c", server_cmd + "; echo 'Press Enter to close...'; read"])
+            opened = True
+            print("[+] HTTP server started in new gnome-terminal window")
+        except:
+            pass
+
+        # Try xterm
+        if not opened:
+            try:
+                subprocess.Popen(["xterm", "-e", server_cmd + "; echo 'Press Enter to close...'; read"])
+                opened = True
+                print("[+] HTTP server started in new xterm window")
+            except:
+                pass
+
+        # Try terminator
+        if not opened:
+            try:
+                subprocess.Popen(["terminator", "-e", server_cmd])
+                opened = True
+                print("[+] HTTP server started in new terminator window")
+            except:
+                pass
+
+        if not opened:
+            print("[-] Could not open new terminal for server.")
+            print(f"  Please run manually in a new terminal: {server_cmd}")
+            print(f"  Then open http://{self.kali_ip}:{self.port} to test")
+
+        # Open DVWA reflected XSS page
+        xss_url = f"{self.dvwa_url}/vulnerabilities/xss_r/"
+        print(f"[+] Opening DVWA Reflected XSS page: {xss_url}")
+        webbrowser.open(xss_url)
+        
     def open_dvwa_xss_page(self):
         xss_url = f"{self.dvwa_url}/vulnerabilities/xss_r/"
         print(f"[+] Opening DVWA Reflected XSS page: {xss_url}")
