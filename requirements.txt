@@ -1,0 +1,3 @@
+requests==2.31.0          # For all HTTP requests, login, CSRF, payloads
+beautifulsoup4==4.12.3    # For parsing DVWA HTML responses in sqli.py
+colorama==0.4.6           # For cross-platform colored terminal output (utils.py)
