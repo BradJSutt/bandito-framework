@@ -42,7 +42,7 @@
 3. run the framework inside of the folder using:
    python3 bandito.py
 
-Fastest commands to test all modules:
+## Fastest commands to test all modules:
 
 use rce
 set LHOST <your_kali_ip>
@@ -54,13 +54,13 @@ back
 use xss
 setup
 generate_reflected
-# paste in DVWA reflected page
+paste in DVWA reflected page
 
 use stored_xss
 setup
 generate_stored
-# paste in DVWA guestbook
+paste in DVWA guestbook
 
 use sqli
 run
-# check dvwa_hashes.txt + hashcat output
+check dvwa_hashes.txt + hashcat output
