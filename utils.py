@@ -92,7 +92,7 @@ def cmatrix_loading():
                 columns[i] -= 1
             else:
                 line += " "
-        print(colored(line, "green"))
+        print(colored(line, "orange"))
         time.sleep(0.06)
 
     # Restore cursor and final clear
