@@ -19,7 +19,7 @@ class BaseModule:
             required = "yes" if data.get("required") else "no"
             desc = data.get("description", "")
             print(f"{name:<15} {colored(value, 'green'):<30} {colored(required, 'red'):<10} {desc}")
-            
+                
     def set_option(self, name, value):
         name = name.upper()
         if name in self.options:
