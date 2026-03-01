@@ -5,7 +5,7 @@ import readline
 from utils import print_banner, colored, cmatrix_loading
 from base_module import BaseModule
 
-# Enable readline for up/down arrows and history (works on Linux/Kali)
+# Enable readline for up/down arrows and history (Kali/Linux)
 readline.parse_and_bind("tab: complete")
 readline.set_history_length(1000)
 history_file = os.path.expanduser("~/.bandito_history")
@@ -16,12 +16,12 @@ atexit.register(readline.write_history_file, history_file)
 print(colored("[*] Readline enabled: up/down arrows now work for command history", "green"))
 
 MODULES = {}
-module_map = {}  # Global temp map for numbered selection (refreshed on show/browse)
+module_map = {}   # Global map: number → full module name (refreshed on show/browse)
 
 def load_modules():
     global MODULES
     MODULES = {}
-    base_path = "modules"  # Scans root 'modules/' and all subfolders
+    base_path = "modules"  # Root folder — scans recursively
 
     if not os.path.isdir(base_path):
         print("[-] modules directory not found!")
@@ -55,7 +55,7 @@ def main():
 
     load_modules()
     current_module = None
-    global module_map  # We'll refresh this on show/browse
+    global module_map  # Shared across show/browse
 
     while True:
         try:
@@ -72,13 +72,13 @@ def main():
 
             if low == "help":
                 print(colored("\nCore Commands:", "yellow"))
-                print("  use <module> / use <number>   - Select module (e.g. use buffer_overflow/benjis_snack_vault_bo or use 01)")
-                print("  show modules                   - List all modules with numbers")
-                print("  browse                         - List categories")
-                print("  browse <category>              - List modules in category with numbers")
-                print("  load <path>                    - Load single .py or directory")
-                print("  back                           - Return to main menu")
-                print("  exit / quit                    - Exit framework\n")
+                print("  use <module> / use <number>     - Select module (e.g. use buffer_overflow/benjis_snack_vault_bo or use 01)")
+                print("  show modules                     - List all modules with numbers")
+                print("  browse                           - List numbered categories")
+                print("  browse <number> / <category>     - List modules in category with numbers")
+                print("  load <path>                      - Load single .py or directory")
+                print("  back                             - Return to main menu")
+                print("  exit / quit                      - Exit framework\n")
                 continue
 
             if low == "show modules":
@@ -88,7 +88,7 @@ def main():
                     continue
 
                 modules_list = sorted(MODULES.keys())
-                module_map.clear()  # Reset map
+                module_map.clear()
                 idx = 1
 
                 for m in modules_list:
@@ -100,28 +100,46 @@ def main():
                 continue
 
             if low == "browse":
-                categories = set(m.split('.')[0] for m in MODULES.keys() if '.' in m)
+                categories = sorted(set(m.split('.')[0] for m in MODULES.keys() if '.' in m))
                 if not categories:
                     print(colored("  No categories found yet", "red"))
                     continue
 
                 print(colored("\nAvailable Categories:", "yellow"))
-                for cat in sorted(categories):
-                    print(colored(f"  - {cat}", "orange"))
-                print(colored("\nType 'browse <category>' to see modules", "yellow"))
+                cat_map = {}
+                idx = 1
+                for cat in categories:
+                    print(colored(f"  {idx:02d} - {cat}", "orange"))
+                    cat_map[str(idx)] = cat
+                    idx += 1
+
+                print(colored("\nUse 'browse <number>' or 'browse <category>' to see modules", "yellow"))
                 continue
 
             if low.startswith("browse "):
-                cat = cmd.split(maxsplit=1)[1].strip()
+                arg = cmd.split(maxsplit=1)[1].strip()
+
+                # Support category by number
+                if arg.isdigit():
+                    # We'll use a temp cat_map from previous browse (or refresh if needed)
+                    # For simplicity, re-calculate categories here
+                    categories = sorted(set(m.split('.')[0] for m in MODULES.keys() if '.' in m))
+                    if arg in [str(i) for i in range(1, len(categories)+1)]:
+                        cat = categories[int(arg)-1]
+                    else:
+                        print(colored(f"[-] No category with number {arg}", "red"))
+                        continue
+                else:
+                    cat = arg
+
                 matching = [m for m in sorted(MODULES.keys()) if m.startswith(cat + ".")]
                 if not matching:
                     print(colored(f"  No modules in category '{cat}'", "red"))
                     continue
 
                 print(colored(f"\nModules in {cat}:", "yellow"))
-                module_map.clear()  # Reset map
+                module_map.clear()
                 idx = 1
-
                 for m in matching:
                     print(colored(f"  {idx:02d} - {m}", "orange"))
                     module_map[str(idx)] = m
@@ -206,7 +224,7 @@ def main():
             if current_module:
                 current_module.handle_command(cmd)
             else:
-                print(colored("[-] No module selected. Use 'use <module>' / 'use <number>' or 'browse' first", "red"))
+                print(colored("[-] No module selected. Use 'use <number>' / 'use <full.name>' or 'browse' / 'browse <category>' first", "red"))
 
         except KeyboardInterrupt:
             print("\n")
