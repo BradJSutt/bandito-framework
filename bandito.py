@@ -16,7 +16,7 @@ atexit.register(readline.write_history_file, history_file)
 print(colored("[*] Readline enabled: up/down arrows now work for command history", "green"))
 
 MODULES = {}
-module_map = {}  # number → full module name
+module_map = {}  # number → full module name (refreshed only when displaying a list)
 cat_map = {}     # number → category name
 
 def load_modules():
@@ -48,11 +48,6 @@ def load_modules():
 
     walk_and_load(base_path)
 
-def refresh_maps():
-    global module_map, cat_map
-    module_map.clear()
-    cat_map.clear()
-
 def main():
     cmatrix_loading()
     print_banner()
@@ -61,6 +56,7 @@ def main():
 
     load_modules()
     current_module = None
+    global module_map, cat_map
 
     while True:
         try:
@@ -87,13 +83,13 @@ def main():
                 continue
 
             if low == "show modules":
-                refresh_maps()
                 print(colored("Available modules:", "yellow"))
                 if not MODULES:
                     print(colored("  No modules loaded yet", "red"))
                     continue
 
                 modules_list = sorted(MODULES.keys())
+                module_map.clear()
                 idx = 1
                 for m in modules_list:
                     print(colored(f"  {idx:02d} - {m}", "orange"))
@@ -104,13 +100,13 @@ def main():
                 continue
 
             if low == "browse":
-                refresh_maps()
                 categories = sorted(set(m.split('.')[0] for m in MODULES.keys() if '.' in m))
                 if not categories:
                     print(colored("  No categories found yet", "red"))
                     continue
 
                 print(colored("\nAvailable Categories:", "yellow"))
+                cat_map.clear()
                 idx = 1
                 for cat in categories:
                     print(colored(f"  {idx:02d} - {cat}", "orange"))
@@ -131,7 +127,7 @@ def main():
 
                 matching = [m for m in sorted(MODULES.keys()) if m.startswith(cat + ".")]
                 if not matching:
-                    print(colored(f"  No modules found in category '{cat}'", "red"))
+                    print(colored(f"  No modules in category '{cat}'", "red"))
                     continue
 
                 print(colored(f"\nModules in {cat}:", "yellow"))
@@ -199,7 +195,7 @@ def main():
             if low.startswith("use "):
                 arg = cmd.split(maxsplit=1)[1].strip()
 
-                # Try numbered lookup first (from last show/browse)
+                # Try numbered lookup first
                 if arg.isdigit() and arg in module_map:
                     module_name = module_map[arg]
                 else:
@@ -211,7 +207,8 @@ def main():
                     if hasattr(current_module, 'show_help'):
                         current_module.show_help()
                 else:
-                    print(colored(f"[-] Module '{module_name}' not found. Try 'show modules' or 'browse <category>' first.", "red"))
+                    print(colored(f"[-] Module '{module_name}' not found", "red"))
+                    print(colored("    Try 'show modules' or 'browse <category>' first", "yellow"))
                 continue
 
             if low == "back":
@@ -221,10 +218,10 @@ def main():
             if current_module:
                 current_module.handle_command(cmd)
             else:
-                print(colored("[-] No module selected. Try:", "red"))
+                print(colored("[-] No module selected. Try these:", "red"))
                 print(colored("    - 'show modules' to see all", "yellow"))
                 print(colored("    - 'browse' to see categories", "yellow"))
-                print(colored("    - 'browse buffer_overflow' for modules in a category", "yellow"))
+                print(colored("    - 'browse buffer_overflow' or 'browse 01' for modules", "yellow"))
                 print(colored("    - 'use 01' after showing a list", "yellow"))
 
         except KeyboardInterrupt:
