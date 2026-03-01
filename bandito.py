@@ -23,27 +23,33 @@ MODULES = {}
 def load_modules():
     global MODULES
     MODULES = {}
-    base_path = "modules/dvwa/exploits"
+    base_path = "modules"  # ← CHANGED: Now scans the root "modules" folder
 
     if not os.path.isdir(base_path):
-        print("[-] modules/dvwa/exploits directory not found!")
+        print("[-] modules directory not found!")
         return
 
-    for file in os.listdir(base_path):
-        if file.endswith(".py") and not file.startswith("__"):
-            module_name = file[:-3]
-            full_path = os.path.join(base_path, file)
-            spec = importlib.util.spec_from_file_location(module_name, full_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+    def walk_and_load(path):
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                if file.endswith(".py") and not file.startswith("__"):
+                    # Build dotted module name (e.g., buffer_overflow.benjis_snack_vault_bo)
+                    rel_path = os.path.relpath(os.path.join(root, file), base_path)
+                    module_name = rel_path.replace(os.sep, ".").rstrip(".py")
+                    full_path = os.path.join(root, file)
+                    spec = importlib.util.spec_from_file_location(module_name, full_path)
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
 
-            for attr in dir(module):
-                obj = getattr(module, attr)
-                if isinstance(obj, type) and issubclass(obj, BaseModule) and obj is not BaseModule:
-                    instance = obj()
-                    MODULES[module_name] = instance
-                    print(colored(f"[+] Loaded module: {module_name}", "green"))
+                    for attr in dir(module):
+                        obj = getattr(module, attr)
+                        if isinstance(obj, type) and issubclass(obj, BaseModule) and obj is not BaseModule:
+                            instance = obj()
+                            MODULES[module_name] = instance
+                            print(colored(f"[+] Loaded module: {module_name}", "green"))
 
+    walk_and_load(base_path)
+    
 def main():
     cmatrix_loading()
     print_banner()
