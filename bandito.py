@@ -16,12 +16,13 @@ atexit.register(readline.write_history_file, history_file)
 print(colored("[*] Readline enabled: up/down arrows now work for command history", "green"))
 
 MODULES = {}
-module_map = {}   # Global map: number → full module name (refreshed on show/browse)
+module_map = {}  # number → full module name (refreshed on show/browse)
+cat_map = {}     # number → category name (refreshed on browse)
 
 def load_modules():
     global MODULES
     MODULES = {}
-    base_path = "modules"  # Root folder — scans recursively
+    base_path = "modules"
 
     if not os.path.isdir(base_path):
         print("[-] modules directory not found!")
@@ -55,7 +56,7 @@ def main():
 
     load_modules()
     current_module = None
-    global module_map  # Shared across show/browse
+    global module_map, cat_map
 
     while True:
         try:
@@ -106,7 +107,7 @@ def main():
                     continue
 
                 print(colored("\nAvailable Categories:", "yellow"))
-                cat_map = {}
+                cat_map.clear()
                 idx = 1
                 for cat in categories:
                     print(colored(f"  {idx:02d} - {cat}", "orange"))
@@ -120,15 +121,8 @@ def main():
                 arg = cmd.split(maxsplit=1)[1].strip()
 
                 # Support category by number
-                if arg.isdigit():
-                    # We'll use a temp cat_map from previous browse (or refresh if needed)
-                    # For simplicity, re-calculate categories here
-                    categories = sorted(set(m.split('.')[0] for m in MODULES.keys() if '.' in m))
-                    if arg in [str(i) for i in range(1, len(categories)+1)]:
-                        cat = categories[int(arg)-1]
-                    else:
-                        print(colored(f"[-] No category with number {arg}", "red"))
-                        continue
+                if arg.isdigit() and arg in cat_map:
+                    cat = cat_map[arg]
                 else:
                     cat = arg
 
@@ -202,7 +196,7 @@ def main():
             if low.startswith("use "):
                 arg = cmd.split(maxsplit=1)[1].strip()
 
-                # Support numbered selection
+                # Support numbered selection from last show/browse
                 if arg.isdigit() and arg in module_map:
                     module_name = module_map[arg]
                 else:
@@ -224,7 +218,7 @@ def main():
             if current_module:
                 current_module.handle_command(cmd)
             else:
-                print(colored("[-] No module selected. Use 'use <number>' / 'use <full.name>' or 'browse' / 'browse <category>' first", "red"))
+                print(colored("[-] No module selected. Try 'browse', 'show modules', or 'use <number>' / 'use <full.name>'", "red"))
 
         except KeyboardInterrupt:
             print("\n")
