@@ -16,8 +16,8 @@ atexit.register(readline.write_history_file, history_file)
 print(colored("[*] Readline enabled: up/down arrows now work for command history", "green"))
 
 MODULES = {}
-module_map = {}  # number → full module name (refreshed only when displaying a list)
-cat_map = {}     # number → category name
+module_map = {}  # "01" → full module name
+cat_map = {}     # "01" → category name
 
 def load_modules():
     global MODULES
@@ -92,8 +92,9 @@ def main():
                 module_map.clear()
                 idx = 1
                 for m in modules_list:
-                    print(colored(f"  {idx:02d} - {m}", "orange"))
-                    module_map[str(idx)] = m
+                    num_str = f"{idx:02d}"
+                    print(colored(f"  {num_str} - {m}", "orange"))
+                    module_map[num_str] = m
                     idx += 1
 
                 print(colored("\nUse 'use <number>' or 'use <full.name>'", "yellow"))
@@ -109,8 +110,9 @@ def main():
                 cat_map.clear()
                 idx = 1
                 for cat in categories:
-                    print(colored(f"  {idx:02d} - {cat}", "orange"))
-                    cat_map[str(idx)] = cat
+                    num_str = f"{idx:02d}"
+                    print(colored(f"  {num_str} - {cat}", "orange"))
+                    cat_map[num_str] = cat
                     idx += 1
 
                 print(colored("\nUse 'browse <number>' or 'browse <category>' to see modules", "yellow"))
@@ -120,8 +122,13 @@ def main():
                 arg = cmd.split(maxsplit=1)[1].strip()
 
                 # Resolve category by number or name
-                if arg.isdigit() and arg in cat_map:
-                    cat = cat_map[arg]
+                if arg.isdigit():
+                    num_key = f"{int(arg):02d}"  # Normalize to "01", "02", etc.
+                    if num_key in cat_map:
+                        cat = cat_map[num_key]
+                    else:
+                        print(colored(f"[-] No category with number {arg}", "red"))
+                        continue
                 else:
                     cat = arg
 
@@ -134,8 +141,9 @@ def main():
                 module_map.clear()
                 idx = 1
                 for m in matching:
-                    print(colored(f"  {idx:02d} - {m}", "orange"))
-                    module_map[str(idx)] = m
+                    num_str = f"{idx:02d}"
+                    print(colored(f"  {num_str} - {m}", "orange"))
+                    module_map[num_str] = m
                     idx += 1
 
                 print(colored("\nUse 'use <number>' or 'use <full.name>'", "yellow"))
@@ -195,9 +203,14 @@ def main():
             if low.startswith("use "):
                 arg = cmd.split(maxsplit=1)[1].strip()
 
-                # Try numbered lookup first
-                if arg.isdigit() and arg in module_map:
-                    module_name = module_map[arg]
+                # Normalize number input (01, 1, 001 → "01")
+                if arg.isdigit():
+                    num_key = f"{int(arg):02d}"
+                    if num_key in module_map:
+                        module_name = module_map[num_key]
+                    else:
+                        print(colored(f"[-] No module with number {arg}", "red"))
+                        continue
                 else:
                     module_name = arg
 
