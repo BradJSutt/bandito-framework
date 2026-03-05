@@ -76,8 +76,10 @@ class BenjisSnackVaultAnalysis(BaseModule):
         # 5. Final test
         self._run_test_offset()
 
+        self._save_analysis_results()
+
         print(colored("\n=== Full analysis complete! ===", "green"))
-        print("You can now use the exploit module.")
+        print("Results saved. You can now run the exploit module.")
 
     # ===================================================================
     # Helper: Wait for target to be back online
@@ -183,6 +185,23 @@ class BenjisSnackVaultAnalysis(BaseModule):
         except Exception as e:
             print(colored(f"[!] Connection failed: {e}", "red"))
             return False
+
+    def _save_analysis_results(self):
+        """Saves key results so the exploit module can auto-load them"""
+        import json
+        data = {
+            "OFFSET": int(self.options["OFFSET"]["value"]),
+            "BADCHARS": "\\x00\\x09\\x0a\\x0d",
+            "RET": "0x114015f3",
+            "PREFIX": self.options["PREFIX"]["value"],
+            "TARGET": self.options["RHOST"]["value"]
+        }
+        try:
+            with open("analysis_results.json", "w") as f:
+                json.dump(data, f, indent=2)
+            print(colored("[+] Analysis results saved to analysis_results.json", "green"))
+        except Exception as e:
+            print(colored(f"[-] Could not save results: {e}", "red"))
 
     def handle_command(self, cmd):
         if cmd.strip().lower() == "run":
