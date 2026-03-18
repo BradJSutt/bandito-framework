@@ -1,246 +1,290 @@
-import os
-import importlib.util
-import sys
-import readline
-from utils import print_banner, colored, cmatrix_loading
-from base_module import BaseModule
+#!/usr/bin/env python3
+"""
+bandito.py  —  Bandito Framework v1.0
+Metasploit-inspired modular exploitation framework for DVWA + BoF research.
+"""
 
-# Enable readline for up/down arrows and history (Kali/Linux)
+import atexit
+import importlib.util
+import os
+import readline
+import sys
+
+from base_module import BaseModule
+from utils import colored, cmatrix_loading, print_banner
+
+# ---------------------------------------------------------------------------
+# Add the framework root to sys.path so every module can do:
+#   from dvwa_base import DVWABase
+#   from base_module import BaseModule
+#   from utils import colored
+# regardless of which sub-folder the module file lives in.
+# ---------------------------------------------------------------------------
+FRAMEWORK_ROOT = os.path.dirname(os.path.abspath(__file__))
+if FRAMEWORK_ROOT not in sys.path:
+    sys.path.insert(0, FRAMEWORK_ROOT)
+
+# ---------------------------------------------------------------------------
+# Readline history
+# ---------------------------------------------------------------------------
 readline.parse_and_bind("tab: complete")
 readline.set_history_length(1000)
-history_file = os.path.expanduser("~/.bandito_history")
-if os.path.exists(history_file):
-    readline.read_history_file(history_file)
-import atexit
-atexit.register(readline.write_history_file, history_file)
-print(colored("[*] Readline enabled: up/down arrows now work for command history", "green"))
+_HISTORY_FILE = os.path.expanduser("~/.bandito_history")
+if os.path.exists(_HISTORY_FILE):
+    readline.read_history_file(_HISTORY_FILE)
+atexit.register(readline.write_history_file, _HISTORY_FILE)
+print(colored("[*] Readline enabled — up/down arrows work for history.", "green"))
 
-MODULES = {}
-module_map = {}  # "01" → full module name
-cat_map = {}     # "01" → category name
+# ---------------------------------------------------------------------------
+# Module registry
+# ---------------------------------------------------------------------------
+MODULES:     dict[str, BaseModule] = {}
+module_map:  dict[str, str]        = {}   # "01" → full module name
+cat_map:     dict[str, str]        = {}   # "01" → category name
 
-def load_modules():
-    global MODULES
-    MODULES = {}
-    base_path = "modules"
+
+def _load_file(full_path: str, module_key: str) -> bool:
+    """
+    Import a single .py file, find any BaseModule subclass inside it,
+    instantiate it, and register it under module_key.
+    Returns True if at least one module was registered.
+    """
+    spec   = importlib.util.spec_from_file_location(module_key, full_path)
+    module = importlib.util.module_from_spec(spec)
+
+    # Ensure the file's own directory is importable (e.g. for relative helpers)
+    file_dir = os.path.dirname(full_path)
+    if file_dir not in sys.path:
+        sys.path.insert(0, file_dir)
+
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:
+        print(colored(f"[-] Error loading {full_path}: {exc}", "red"))
+        return False
+
+    registered = False
+    for attr in dir(module):
+        obj = getattr(module, attr)
+        if (
+            isinstance(obj, type)
+            and issubclass(obj, BaseModule)
+            and obj is not BaseModule
+        ):
+            instance = obj()
+            MODULES[module_key] = instance
+            print(colored(f"[+] Loaded: {module_key}", "green"))
+            registered = True
+
+    return registered
+
+
+def load_modules(base_path: str = "modules"):
+    """Walk the modules/ directory and load every non-dunder .py file."""
+    MODULES.clear()
 
     if not os.path.isdir(base_path):
-        print("[-] modules directory not found!")
+        print(colored(f"[-] Modules directory not found: {base_path}", "red"))
         return
 
-    def walk_and_load(path):
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                if file.endswith(".py") and not file.startswith("__"):
-                    rel_path = os.path.relpath(os.path.join(root, file), base_path)
-                    module_name = rel_path.replace(os.sep, ".").rstrip(".py")
-                    full_path = os.path.join(root, file)
-                    spec = importlib.util.spec_from_file_location(module_name, full_path)
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
+    for root, _dirs, files in os.walk(base_path):
+        for filename in sorted(files):
+            if not filename.endswith(".py") or filename.startswith("__"):
+                continue
+            full_path  = os.path.join(root, filename)
+            # Build a dotted key:  "buffer_overflow.benjis_snack_vault_bo"
+            rel_path   = os.path.relpath(full_path, base_path)
+            module_key = rel_path.replace(os.sep, ".").removesuffix(".py")
+            _load_file(full_path, module_key)
 
-                    for attr in dir(module):
-                        obj = getattr(module, attr)
-                        if isinstance(obj, type) and issubclass(obj, BaseModule) and obj is not BaseModule:
-                            instance = obj()
-                            MODULES[module_name] = instance
-                            print(colored(f"[+] Loaded module: {module_name}", "green"))
 
-    walk_and_load(base_path)
-
+# ---------------------------------------------------------------------------
+# Main REPL
+# ---------------------------------------------------------------------------
 def main():
     cmatrix_loading()
     print_banner()
-    print(colored("[*] Bandito Framework v1.0 - Educational Exploitation Tool", "dark_red"))
+    print(colored("[*] Bandito Framework v1.0  —  Educational Exploitation Tool", "dark_red"))
     print(colored("[*] Type 'help' for commands\n", "yellow"))
 
     load_modules()
-    current_module = None
-    global module_map, cat_map
+
+    current_module: BaseModule | None = None
 
     while True:
         try:
-            prompt = colored(f"bandito ({current_module.name if current_module else 'no module'}) > ", "red")
-            cmd = input(prompt).strip()
+            label  = current_module.name if current_module else "no module"
+            prompt = colored(f"bandito ({label}) > ", "red")
+            cmd    = input(prompt).strip()
             if not cmd:
                 continue
 
             low = cmd.lower()
+
+            # ---------------------------------------------------------------
+            # Global commands (available regardless of selected module)
+            # ---------------------------------------------------------------
 
             if low in ["exit", "quit"]:
                 print(colored("[*] Goodbye!", "red"))
                 break
 
             if low == "help":
-                print(colored("\nCore Commands:", "yellow"))
-                print("  use <module> / use <number>     - Select module (e.g. use 01 or use buffer_overflow/benjis_snack_vault_bo)")
-                print("  show modules                     - List all modules with numbers")
-                print("  browse                           - List numbered categories")
-                print("  browse <number> / <category>     - Show modules in category with numbers")
-                print("  load <path>                      - Load custom .py file or directory")
-                print("  back                             - Return to main menu")
-                print("  exit / quit                      - Exit framework\n")
+                _print_help()
                 continue
 
             if low == "show modules":
-                print(colored("Available modules:", "yellow"))
-                if not MODULES:
-                    print(colored("  No modules loaded yet", "red"))
-                    continue
-
-                modules_list = sorted(MODULES.keys())
-                module_map.clear()
-                idx = 1
-                for m in modules_list:
-                    num_str = f"{idx:02d}"
-                    print(colored(f"  {num_str} - {m}", "orange"))
-                    module_map[num_str] = m
-                    idx += 1
-
-                print(colored("\nUse 'use <number>' or 'use <full.name>'", "yellow"))
+                _cmd_show_modules()
                 continue
 
             if low == "browse":
-                categories = sorted(set(m.split('.')[0] for m in MODULES.keys() if '.' in m))
-                if not categories:
-                    print(colored("  No categories found yet", "red"))
-                    continue
-
-                print(colored("\nAvailable Categories:", "yellow"))
-                cat_map.clear()
-                idx = 1
-                for cat in categories:
-                    num_str = f"{idx:02d}"
-                    print(colored(f"  {num_str} - {cat}", "orange"))
-                    cat_map[num_str] = cat
-                    idx += 1
-
-                print(colored("\nUse 'browse <number>' or 'browse <category>' to see modules", "yellow"))
+                _cmd_browse()
                 continue
 
             if low.startswith("browse "):
-                arg = cmd.split(maxsplit=1)[1].strip()
-
-                # Resolve category by number or name
-                if arg.isdigit():
-                    num_key = f"{int(arg):02d}"  # Normalize to "01", "02", etc.
-                    if num_key in cat_map:
-                        cat = cat_map[num_key]
-                    else:
-                        print(colored(f"[-] No category with number {arg}", "red"))
-                        continue
-                else:
-                    cat = arg
-
-                matching = [m for m in sorted(MODULES.keys()) if m.startswith(cat + ".")]
-                if not matching:
-                    print(colored(f"  No modules in category '{cat}'", "red"))
-                    continue
-
-                print(colored(f"\nModules in {cat}:", "yellow"))
-                module_map.clear()
-                idx = 1
-                for m in matching:
-                    num_str = f"{idx:02d}"
-                    print(colored(f"  {num_str} - {m}", "orange"))
-                    module_map[num_str] = m
-                    idx += 1
-
-                print(colored("\nUse 'use <number>' or 'use <full.name>'", "yellow"))
+                _cmd_browse_category(cmd.split(maxsplit=1)[1].strip())
                 continue
 
             if low.startswith("load "):
-                path = cmd.split(maxsplit=1)[1].strip()
-                if not os.path.exists(path):
-                    print(colored(f"[-] Path not found: {path}", "red"))
-                    continue
-
-                try:
-                    count = 0
-                    if os.path.isdir(path):
-                        for root, _, files in os.walk(path):
-                            for file in files:
-                                if file.endswith(".py") and not file.startswith("__"):
-                                    full_path = os.path.join(root, file)
-                                    module_name = os.path.splitext(file)[0]
-                                    spec = importlib.util.spec_from_file_location(module_name, full_path)
-                                    module = importlib.util.module_from_spec(spec)
-                                    spec.loader.exec_module(module)
-
-                                    loaded = False
-                                    for attr in dir(module):
-                                        obj = getattr(module, attr)
-                                        if isinstance(obj, type) and issubclass(obj, BaseModule) and obj is not BaseModule:
-                                            instance = obj()
-                                            key = f"custom.{module_name}"
-                                            MODULES[key] = instance
-                                            print(colored(f"[+] Loaded from path: {key}", "green"))
-                                            count += 1
-                                            loaded = True
-                                    if not loaded:
-                                        print(colored(f"[-] No BaseModule in {full_path}", "red"))
-                    else:
-                        module_name = os.path.splitext(os.path.basename(path))[0]
-                        spec = importlib.util.spec_from_file_location(module_name, path)
-                        module = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(module)
-
-                        loaded = False
-                        for attr in dir(module):
-                            obj = getattr(module, attr)
-                            if isinstance(obj, type) and issubclass(obj, BaseModule) and obj is not BaseModule:
-                                instance = obj()
-                                key = f"custom.{module_name}"
-                                MODULES[key] = instance
-                                print(colored(f"[+] Loaded custom module: {key}", "green"))
-                                loaded = True
-                        if not loaded:
-                            print(colored(f"[-] No BaseModule in {path}", "red"))
-                except Exception as e:
-                    print(colored(f"[-] Load failed: {e}", "red"))
+                _cmd_load(cmd.split(maxsplit=1)[1].strip())
                 continue
 
             if low.startswith("use "):
-                arg = cmd.split(maxsplit=1)[1].strip()
-
-                # Normalize number input (01, 1, 001 → "01")
-                if arg.isdigit():
-                    num_key = f"{int(arg):02d}"
-                    if num_key in module_map:
-                        module_name = module_map[num_key]
-                    else:
-                        print(colored(f"[-] No module with number {arg}", "red"))
-                        continue
-                else:
-                    module_name = arg
-
-                if module_name in MODULES:
-                    current_module = MODULES[module_name]
-                    print(colored(f"[+] Module loaded: {module_name}", "green"))
-                    if hasattr(current_module, 'show_help'):
-                        current_module.show_help()
-                else:
-                    print(colored(f"[-] Module '{module_name}' not found", "red"))
-                    print(colored("    Try 'show modules' or 'browse <category>' first", "yellow"))
+                result = _cmd_use(cmd.split(maxsplit=1)[1].strip())
+                if result is not None:
+                    current_module = result
                 continue
 
             if low == "back":
                 current_module = None
                 continue
 
+            # ---------------------------------------------------------------
+            # Delegate to the active module
+            # ---------------------------------------------------------------
             if current_module:
                 current_module.handle_command(cmd)
             else:
-                print(colored("[-] No module selected. Try these:", "red"))
-                print(colored("    - 'show modules' to see all", "yellow"))
-                print(colored("    - 'browse' to see categories", "yellow"))
-                print(colored("    - 'browse buffer_overflow' or 'browse 01' for modules", "yellow"))
-                print(colored("    - 'use 01' after showing a list", "yellow"))
+                print(colored("[-] No module selected. Try:", "red"))
+                print(colored("    show modules  /  browse  /  use <name or number>", "yellow"))
 
         except KeyboardInterrupt:
-            print("\n")
-        except Exception as e:
-            print(colored(f"[-] Error: {e}", "red"))
+            print()
+        except Exception as exc:
+            print(colored(f"[-] Error: {exc}", "red"))
+
+
+# ---------------------------------------------------------------------------
+# Command helpers
+# ---------------------------------------------------------------------------
+
+def _print_help():
+    print(colored("\nCore Commands:", "yellow"))
+    print("  use <name|number>   - Load a module  (e.g. 'use 01' or 'use buffer_overflow.benjis_snack_vault_bo')")
+    print("  show modules        - List all loaded modules with index numbers")
+    print("  browse              - List module categories")
+    print("  browse <cat|number> - List modules inside a category")
+    print("  load <path>         - Load a custom .py file or directory")
+    print("  back                - Deselect current module")
+    print("  exit / quit         - Exit the framework\n")
+
+
+def _cmd_show_modules():
+    if not MODULES:
+        print(colored("  No modules loaded.", "red"))
+        return
+
+    module_map.clear()
+    print(colored("\nAvailable modules:", "yellow"))
+    for idx, name in enumerate(sorted(MODULES), start=1):
+        key = f"{idx:02d}"
+        module_map[key] = name
+        print(colored(f"  {key}", "orange") + f" - {name}")
+    print(colored("\nUse 'use <number>' or 'use <full.name>'", "yellow"))
+
+
+def _cmd_browse():
+    categories = sorted({name.split(".")[0] for name in MODULES if "." in name})
+    if not categories:
+        print(colored("  No categories found.", "red"))
+        return
+
+    cat_map.clear()
+    print(colored("\nCategories:", "yellow"))
+    for idx, cat in enumerate(categories, start=1):
+        key = f"{idx:02d}"
+        cat_map[key] = cat
+        print(colored(f"  {key}", "orange") + f" - {cat}")
+    print(colored("\nUse 'browse <number>' or 'browse <category>'", "yellow"))
+
+
+def _cmd_browse_category(arg: str):
+    if arg.isdigit():
+        key = f"{int(arg):02d}"
+        cat = cat_map.get(key)
+        if not cat:
+            print(colored(f"[-] No category with number {arg}. Run 'browse' first.", "red"))
+            return
+    else:
+        cat = arg
+
+    matching = [m for m in sorted(MODULES) if m.startswith(cat + ".")]
+    if not matching:
+        print(colored(f"  No modules in category '{cat}'.", "red"))
+        return
+
+    module_map.clear()
+    print(colored(f"\nModules in {cat}:", "yellow"))
+    for idx, name in enumerate(matching, start=1):
+        key = f"{idx:02d}"
+        module_map[key] = name
+        print(colored(f"  {key}", "orange") + f" - {name}")
+    print(colored("\nUse 'use <number>'", "yellow"))
+
+
+def _cmd_load(path: str):
+    if not os.path.exists(path):
+        print(colored(f"[-] Path not found: {path}", "red"))
+        return
+
+    paths = []
+    if os.path.isdir(path):
+        for root, _, files in os.walk(path):
+            for f in files:
+                if f.endswith(".py") and not f.startswith("__"):
+                    paths.append(os.path.join(root, f))
+    else:
+        paths = [path]
+
+    for fp in paths:
+        stem = os.path.splitext(os.path.basename(fp))[0]
+        key  = f"custom.{stem}"
+        if not _load_file(fp, key):
+            print(colored(f"[-] No BaseModule subclass found in {fp}", "red"))
+
+
+def _cmd_use(arg: str) -> BaseModule | None:
+    """Resolve arg to a module name, return the instance or None."""
+    if arg.isdigit():
+        key = f"{int(arg):02d}"
+        name = module_map.get(key)
+        if not name:
+            print(colored(f"[-] No module with number {arg}. Run 'show modules' or 'browse' first.", "red"))
+            return None
+    else:
+        name = arg
+
+    instance = MODULES.get(name)
+    if not instance:
+        print(colored(f"[-] Module '{name}' not found.", "red"))
+        print(colored("    Try 'show modules' or 'browse <category>'", "yellow"))
+        return None
+
+    print(colored(f"[+] Module loaded: {name}", "green"))
+    if hasattr(instance, "show_help"):
+        instance.show_help()
+    return instance
+
 
 if __name__ == "__main__":
     main()

@@ -1,17 +1,23 @@
-import time
-import random
-import os
+"""
+utils.py — shared display utilities for Bandito Framework
+"""
 
-def colored(text, color):
+import os
+import random
+import time
+
+
+def colored(text: str, color: str) -> str:
     colors = {
         "dark_red": "\033[31m",
-        "red": "\033[91m",
-        "green": "\033[92m",
-        "yellow": "\033[93m",
-        "orange": "\033[38;5;208m",
-        "reset": "\033[0m"
+        "red":      "\033[91m",
+        "green":    "\033[92m",
+        "yellow":   "\033[93m",
+        "orange":   "\033[38;5;208m",
+        "reset":    "\033[0m",
     }
     return colors.get(color, "") + text + colors["reset"]
+
 
 def print_banner():
     banner = r"""
@@ -62,24 +68,21 @@ def print_banner():
                 ▒███    ▒███ ▒███    ▒███  ▒███  ▒▒█████  ▒███    ███  ▒███     ▒███    ▒▒███     ███ 
                 ███████████  █████   █████ █████  ▒▒█████ ██████████   █████    █████    ▒▒▒███████▒  
                 ▒▒▒▒▒▒▒▒▒▒▒  ▒▒▒▒▒   ▒▒▒▒▒ ▒▒▒▒▒    ▒▒▒▒▒ ▒▒▒▒▒▒▒▒▒▒   ▒▒▒▒▒    ▒▒▒▒▒       ▒▒▒▒▒▒▒    
-                                                                                                        
-                                                                                       
-                                                                                                                              
-    Author: Brad Sutton                                                                
+
+    Author: Brad Sutton
     Version: v1.0
 """
     print(colored(banner, "dark_red"))
 
+
 def cmatrix_loading():
-    # Clear screen and hide cursor
-    print("\033[2J\033[H\033[?25l", end="")
-
+    print("\033[2J\033[H\033[?25l", end="")   # clear + hide cursor
     print(colored("Initializing Bandito Framework...", "orange"))
-    print("")
+    print()
 
-    chars = "01█▓▒░"
-    width = os.get_terminal_size().columns if hasattr(os, 'get_terminal_size') else 80
-    height = os.get_terminal_size().lines if hasattr(os, 'get_terminal_size') else 24
+    chars   = "01█▓▒░"
+    width   = os.get_terminal_size().columns if hasattr(os, "get_terminal_size") else 80
+    height  = os.get_terminal_size().lines   if hasattr(os, "get_terminal_size") else 24
     columns = [0] * width
 
     for _ in range(35):
@@ -95,8 +98,5 @@ def cmatrix_loading():
         print(colored(line, "orange"))
         time.sleep(0.06)
 
-    # Restore cursor and final clear
-    print("\033[?25h\033[2J\033[H", end="")
-    print("\n" * 2)
-    print("Bandito Framework v1.0 loaded.")
-    print("")
+    print("\033[?25h\033[2J\033[H", end="")   # restore cursor + clear
+    print("\n\nBandito Framework v1.0 loaded.\n")
