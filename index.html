@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bandito Framework — Educational Exploitation Tool</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0a0505;--surface:#0f0808;--surface2:#160c0c;
+  --border:#2a0f0f;--red:#cc1111;--red2:#ff2222;--red3:#ff5555;
+  --dim:#4a1515;--muted:#7a3333;--text:#e8d0d0;--bright:#ff8888;
+}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace;overflow-x:hidden;}
+
+/* Scanlines overlay */
+body::before{
+  content:'';position:fixed;inset:0;
+  background:repeating-linear-gradient(0deg,rgba(0,0,0,0.15) 0px,rgba(0,0,0,0.15) 1px,transparent 1px,transparent 3px);
+  pointer-events:none;z-index:9998;
+}
+/* Red vignette */
+body::after{
+  content:'';position:fixed;inset:0;
+  background:radial-gradient(ellipse 120% 100% at 50% 0%,transparent 50%,rgba(180,0,0,0.08) 100%);
+  pointer-events:none;z-index:9997;
+}
+
+/* ── Nav ── */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  padding:0.75rem 3rem;
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(10,5,5,0.92);
+  border-bottom:1px solid var(--border);
+  backdrop-filter:blur(10px);
+}
+.nav-logo{font-family:'VT323',monospace;font-size:1.6rem;color:var(--red2);letter-spacing:0.1em;}
+.nav-logo span{color:var(--muted);}
+nav ul{list-style:none;display:flex;gap:2rem;}
+nav a{color:var(--muted);text-decoration:none;font-size:0.8rem;letter-spacing:0.12em;text-transform:uppercase;transition:color 0.2s;}
+nav a:hover{color:var(--red2);}
+.nav-badge{
+  font-size:0.65rem;padding:0.2rem 0.6rem;
+  border:1px solid var(--red);color:var(--red);
+  letter-spacing:0.1em;text-transform:uppercase;
+}
+
+/* ── Hero ── */
+.hero{
+  min-height:100vh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  padding:6rem 2rem 4rem;
+  position:relative;overflow:hidden;
+  text-align:center;
+}
+/* Grid bg */
+.hero-grid{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(rgba(204,17,17,0.06) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(204,17,17,0.06) 1px,transparent 1px);
+  background-size:40px 40px;
+  mask-image:radial-gradient(ellipse 80% 80% at 50% 50%,black 30%,transparent 100%);
+}
+/* Big glow behind logo */
+.hero-glow{
+  position:absolute;width:700px;height:700px;border-radius:50%;
+  background:radial-gradient(circle,rgba(200,0,0,0.12) 0%,transparent 70%);
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+
+/* ASCII logo - rendered as pre with pixel font */
+.ascii-logo{
+  font-family:'VT323',monospace;
+  font-size:clamp(6px,1vw,11px);
+  line-height:1.15;
+  color:var(--red2);
+  text-shadow:0 0 20px rgba(255,34,34,0.6),0 0 40px rgba(200,0,0,0.3);
+  white-space:pre;
+  position:relative;z-index:2;
+  animation:flicker 8s ease-in-out infinite;
+  margin-bottom:0.5rem;
+}
+
+/* BANDITO text logo */
+.bandito-text{
+  font-family:'VT323',monospace;
+  font-size:clamp(3rem,10vw,8rem);
+  color:var(--red2);
+  letter-spacing:0.15em;
+  text-shadow:0 0 30px rgba(255,34,34,0.8),0 0 60px rgba(200,0,0,0.4),4px 4px 0 #3a0000;
+  position:relative;z-index:2;
+  animation:flicker 8s ease-in-out infinite;
+  line-height:1;
+  margin-bottom:1rem;
+}
+
+.hero-meta{
+  font-size:0.78rem;color:var(--muted);
+  letter-spacing:0.15em;margin-bottom:2rem;
+  position:relative;z-index:2;
+}
+.hero-meta span{color:var(--red3);}
+
+.hero-badges{
+  display:flex;gap:0.75rem;flex-wrap:wrap;
+  justify-content:center;margin-bottom:3rem;
+  position:relative;z-index:2;
+}
+.badge{
+  font-size:0.68rem;padding:0.25rem 0.75rem;
+  border:1px solid var(--border);color:var(--muted);
+  letter-spacing:0.08em;
+}
+.badge.red{border-color:var(--red);color:var(--red3);}
+
+.hero-btns{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;position:relative;z-index:2;}
+.btn-main{
+  padding:0.8rem 2rem;background:var(--red);color:#000;
+  font-family:'Share Tech Mono',monospace;font-weight:700;
+  font-size:0.85rem;letter-spacing:0.1em;text-decoration:none;
+  border:none;cursor:pointer;display:inline-flex;align-items:center;gap:0.5rem;
+  transition:background 0.2s,box-shadow 0.2s,transform 0.15s;
+  clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px));
+}
+.btn-main:hover{background:var(--red2);box-shadow:0 0 20px rgba(255,34,34,0.5);transform:translateY(-1px);}
+.btn-ghost{
+  padding:0.8rem 2rem;background:transparent;color:var(--red3);
+  font-family:'Share Tech Mono',monospace;font-size:0.85rem;
+  letter-spacing:0.1em;text-decoration:none;
+  border:1px solid var(--border);display:inline-flex;align-items:center;gap:0.5rem;
+  transition:border-color 0.2s,color 0.2s;
+}
+.btn-ghost:hover{border-color:var(--red);color:var(--red2);}
+
+/* Scrolling terminal line */
+.term-ticker{
+  position:absolute;bottom:0;left:0;right:0;
+  background:rgba(204,17,17,0.08);
+  border-top:1px solid var(--border);
+  padding:0.5rem 2rem;
+  font-size:0.72rem;color:var(--muted);
+  overflow:hidden;white-space:nowrap;
+  letter-spacing:0.05em;
+}
+.term-ticker-inner{display:inline-block;animation:ticker 30s linear infinite;}
+
+/* ── Sections ── */
+section{padding:6rem 3rem;}
+.section-inner{max-width:1100px;margin:0 auto;}
+
+.sec-eyebrow{
+  font-size:0.7rem;color:var(--red);
+  letter-spacing:0.2em;text-transform:uppercase;
+  margin-bottom:0.75rem;display:flex;align-items:center;gap:0.75rem;
+}
+.sec-eyebrow::before{content:'';flex:0 0 30px;height:1px;background:var(--red);}
+h2.sec-title{
+  font-family:'VT323',monospace;
+  font-size:clamp(2rem,5vw,3.5rem);
+  color:var(--text);letter-spacing:0.05em;
+  margin-bottom:1rem;line-height:1.1;
+}
+h2.sec-title em{color:var(--red2);font-style:normal;}
+.sec-sub{font-size:0.88rem;color:var(--muted);line-height:1.8;max-width:600px;margin-bottom:3rem;}
+
+/* ── Terminal block ── */
+.term-block{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-top:2px solid var(--red);
+  overflow:hidden;
+}
+.term-bar{
+  background:var(--surface2);padding:0.5rem 1rem;
+  display:flex;align-items:center;gap:0.5rem;
+  border-bottom:1px solid var(--border);
+}
+.term-dot{width:10px;height:10px;border-radius:50%;}
+.term-dot.r{background:#cc4444;}
+.term-dot.y{background:#888800;}
+.term-dot.g{background:#228822;}
+.term-title-bar{font-size:0.68rem;color:var(--muted);letter-spacing:0.1em;margin-left:auto;margin-right:auto;}
+.term-body{padding:1.5rem;font-size:0.82rem;line-height:1.9;overflow-x:auto;}
+.term-body::-webkit-scrollbar{height:4px;}
+.term-body::-webkit-scrollbar-thumb{background:var(--dim);}
+.prompt{color:var(--red3);}
+.cmd{color:var(--text);}
+.out{color:var(--muted);}
+.out.g{color:#55aa55;}
+.out.r{color:var(--red3);}
+.out.b{color:#5588cc;}
+.out.y{color:#aaaa33;}
+.comment{color:var(--dim);}
+.hl{color:var(--bright);}
+.blank{display:block;height:0.5rem;}
+
+/* ── Install ── */
+#install{background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);}
+.install-grid{display:grid;grid-template-columns:1fr 1fr;gap:2rem;}
+.install-step{
+  background:var(--bg);border:1px solid var(--border);
+  border-left:3px solid var(--red);padding:1.5rem;
+  transition:border-left-color 0.2s,background 0.2s;
+}
+.install-step:hover{background:var(--surface2);border-left-color:var(--red2);}
+.step-num{font-family:'VT323',monospace;font-size:2rem;color:var(--red);line-height:1;margin-bottom:0.5rem;}
+.step-title{font-size:0.88rem;color:var(--text);font-weight:700;margin-bottom:0.5rem;letter-spacing:0.05em;}
+.step-desc{font-size:0.78rem;color:var(--muted);line-height:1.7;margin-bottom:0.75rem;}
+.step-code{
+  background:rgba(0,0,0,0.4);padding:0.6rem 0.85rem;
+  font-size:0.78rem;color:var(--red3);
+  border-left:2px solid var(--dim);display:block;
+  word-break:break-all;
+}
+
+/* ── Modules ── */
+.modules-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);}
+.mod-card{
+  background:var(--surface);padding:1.75rem;
+  transition:background 0.2s;position:relative;overflow:hidden;
+}
+.mod-card::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;
+  height:2px;background:var(--red);transform:scaleX(0);transform-origin:left;
+  transition:transform 0.3s;
+}
+.mod-card:hover{background:var(--surface2);}
+.mod-card:hover::after{transform:scaleX(1);}
+.mod-cat{font-size:0.62rem;color:var(--red);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:0.75rem;}
+.mod-name{font-family:'VT323',monospace;font-size:1.6rem;color:var(--text);margin-bottom:0.5rem;letter-spacing:0.05em;}
+.mod-desc{font-size:0.78rem;color:var(--muted);line-height:1.7;margin-bottom:1rem;}
+.mod-commands{display:flex;flex-direction:column;gap:0.25rem;}
+.mod-cmd{font-size:0.72rem;color:var(--dim);padding:0.2rem 0;}
+.mod-cmd span{color:var(--red3);}
+.mod-status{
+  display:inline-block;font-size:0.6rem;letter-spacing:0.1em;
+  padding:0.15rem 0.5rem;border:1px solid var(--red);color:var(--red);
+  text-transform:uppercase;margin-bottom:0.75rem;
+}
+
+/* ── Custom module section ── */
+#custom{background:var(--bg);}
+.custom-grid{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:start;}
+
+/* ── Footer ── */
+footer{
+  padding:2rem 3rem;border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:0.72rem;color:var(--dim);letter-spacing:0.05em;
+}
+footer a{color:var(--red);text-decoration:none;}
+footer a:hover{color:var(--red2);}
+
+/* ── Animations ── */
+@keyframes flicker{
+  0%,95%,100%{opacity:1;}
+  96%{opacity:0.85;}
+  97%{opacity:1;}
+  98%{opacity:0.7;}
+  99%{opacity:1;}
+}
+@keyframes ticker{
+  from{transform:translateX(100vw);}
+  to{transform:translateX(-100%);}
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:none;}}
+@keyframes cursor{0%,100%{opacity:1;}50%{opacity:0;}}
+
+.reveal-item{opacity:0;transform:translateY(20px);transition:opacity 0.5s,transform 0.5s;}
+.reveal-item.vis{opacity:1;transform:none;}
+
+@media(max-width:900px){
+  nav{padding:0.75rem 1.5rem;}nav ul{gap:1rem;}
+  section{padding:4rem 1.5rem;}
+  .install-grid,.custom-grid{grid-template-columns:1fr;}
+  .modules-grid{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">BANDITO<span>.fw</span></div>
+  <ul>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#modules">Modules</a></li>
+    <li><a href="#custom">Custom</a></li>
+  </ul>
+  <span class="nav-badge">v1.0 — Educational</span>
+</nav>
+
+<!-- Hero -->
+<section class="hero" id="home">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+
+  <!-- ASCII skull reproduced from the actual Bandito banner -->
+  <pre class="ascii-logo">
+                         .,,uod8B8bou,,.
+                ..,uod8BBBBBBBBBBBBBBBBRPFT?l!i:.
+           ,=( CBBBBBBBBBBBBBBBBRPFT?!|!b!.    ) ,
+           !T CBBBBBBBBBBBBBBBBBB?!|/!b!(.     ) .
+    '?.   d !  CBBBBBBBBBBBBBBBBBB!|||!|!b,   ;  '
+     ?b.  ! ,   CBBBBBBBBBBBBBBBB?!!!|.  7    ;
+      ?$   b     CBBBBBBBBBBBBBB?||!       ,d;
+       ?$  ,b  ,.CBBBBBBBBBBBBB?|||||   ,o8B;
+        "$. "$ "  CBBBBBBBBBBBB!|||||  ,oFBBb
+         "?b. b   ?BBBBBBBBBB?|||||   8BBBBBF
+           ?$b.   "BBBBBBBBB?|||||  ,BBBBBBF!
+            "$b.  "BBBBBBBBB!||| ,8BBBBBBF!|
+              ?$b. ?BBBBBBBB?!! ,FBBBBBF! ||
+               ?"$b."BBBBBBB?! ,BBBBF!   ||!
+                 ?"$. BBBBBBB ,FBBF!     |||
+                   ?b. BBBBBBbBBBF!      ||||
+                    "$b.BBBBBBBBBF        ||||.
+                     "?bBBBBBBBF         !!!!!
+                      '?BBBBBBF          !!!!!
+                        "?BBB?           !!!!
+  </pre>
+
+  <div class="bandito-text">BANDITO</div>
+
+  <div class="hero-meta">
+    Author: <span>Brad Sutton</span> &nbsp;|&nbsp; Version: <span>v1.0</span> &nbsp;|&nbsp; Target: <span>DVWA</span>
+  </div>
+
+  <div class="hero-badges">
+    <span class="badge red">Educational Only</span>
+    <span class="badge red">Python 3.10+</span>
+    <span class="badge">Kali Linux</span>
+    <span class="badge">Metasploit-Style CLI</span>
+    <span class="badge">Modular</span>
+    <span class="badge">DVWA + BoF</span>
+  </div>
+
+  <div class="hero-btns">
+    <a href="https://github.com/BradJSutt/bandito-framework" target="_blank" class="btn-main">&#x2193; Clone on GitHub</a>
+    <a href="#install" class="btn-ghost">Quick Install &#x2192;</a>
+  </div>
+
+  <div class="term-ticker">
+    <span class="term-ticker-inner">
+      &nbsp;&nbsp;&nbsp;&nbsp;
+      [*] Bandito Framework v1.0 — Educational Exploitation Tool &nbsp;&nbsp;&nbsp;
+      [+] Loaded module: rce &nbsp;&nbsp;&nbsp;
+      [+] Loaded module: xss_reflected &nbsp;&nbsp;&nbsp;
+      [+] Loaded module: xss_stored &nbsp;&nbsp;&nbsp;
+      [+] Loaded module: sqli &nbsp;&nbsp;&nbsp;
+      [+] Loaded module: buffer_overflow.analysis &nbsp;&nbsp;&nbsp;
+      [+] Loaded module: buffer_overflow.exploit &nbsp;&nbsp;&nbsp;
+      [*] Type 'help' for commands &nbsp;&nbsp;&nbsp;
+      bandito (no module) &gt; _
+      &nbsp;&nbsp;&nbsp;&nbsp;
+    </span>
+  </div>
+</section>
+
+<!-- Install -->
+<section id="install">
+  <div class="section-inner">
+    <p class="sec-eyebrow">Getting Started</p>
+    <h2 class="sec-title">Install &amp; <em>Launch</em></h2>
+    <p class="sec-sub">Bandito runs on Python 3.10+ and is designed for Kali Linux. For buffer overflow modules, Metasploit must be installed. All DVWA modules require a running DVWA instance.</p>
+
+    <div class="install-grid">
+      <div class="install-step reveal-item">
+        <div class="step-num">01</div>
+        <div class="step-title">Clone the repository</div>
+        <div class="step-desc">Pull the latest version from GitHub into your working directory.</div>
+        <code class="step-code">git clone https://github.com/BradJSutt/bandito-framework.git<br>cd bandito-framework</code>
+      </div>
+      <div class="install-step reveal-item">
+        <div class="step-num">02</div>
+        <div class="step-title">Install dependencies</div>
+        <div class="step-desc">Install required Python packages. A virtual environment is recommended.</div>
+        <code class="step-code">pip3 install -r requirements.txt</code>
+      </div>
+      <div class="install-step reveal-item">
+        <div class="step-num">03</div>
+        <div class="step-title">Launch the framework</div>
+        <div class="step-desc">Run the entry point. Bandito auto-discovers and loads all modules under <code style="color:var(--red3)">modules/</code>.</div>
+        <code class="step-code">python3 bandito.py</code>
+      </div>
+      <div class="install-step reveal-item">
+        <div class="step-num">04</div>
+        <div class="step-title">Requirements</div>
+        <div class="step-desc">Make sure your environment has what Bandito needs before running.</div>
+        <code class="step-code">Python 3.10+&nbsp;&nbsp;&nbsp;# required<br>Kali Linux&nbsp;&nbsp;&nbsp;&nbsp;# recommended<br>Metasploit&nbsp;&nbsp;&nbsp;&nbsp;# BoF modules only<br>DVWA running&nbsp;&nbsp;# DVWA modules</code>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Usage -->
+<section id="usage">
+  <div class="section-inner">
+    <p class="sec-eyebrow">How It Works</p>
+    <h2 class="sec-title">The <em>CLI</em></h2>
+    <p class="sec-sub">Bandito uses a Metasploit-style command interface. Select a module, configure your options, and run. Every module exposes the same consistent command set.</p>
+
+    <div class="term-block reveal-item">
+      <div class="term-bar">
+        <div class="term-dot r"></div><div class="term-dot y"></div><div class="term-dot g"></div>
+        <div class="term-title-bar">bandito — bash — 120×40</div>
+      </div>
+      <div class="term-body">
+<span class="out g">[*] Bandito Framework v1.0 — Educational Exploitation Tool</span><br>
+<span class="out g">[*] Type 'help' for commands</span><br>
+<span class="blank"></span>
+<span class="out g">[+] Loaded module: rce</span><br>
+<span class="out g">[+] Loaded module: xss_reflected</span><br>
+<span class="out g">[+] Loaded module: xss_stored</span><br>
+<span class="out g">[+] Loaded module: sqli</span><br>
+<span class="out g">[+] Loaded module: buffer_overflow.analysis</span><br>
+<span class="out g">[+] Loaded module: buffer_overflow.exploit</span><br>
+<span class="blank"></span>
+<span class="prompt">bandito (no module) &gt; </span><span class="cmd">help</span><br>
+<span class="blank"></span>
+<span class="out y">  Core Commands</span><br>
+<span class="out">  ─────────────────────────────────────────────────────</span><br>
+<span class="out">  <span class="hl">use</span> &lt;module&gt;          Load a module (e.g. use command_injection.rce)</span><br>
+<span class="out">  <span class="hl">show modules</span>          List all available modules</span><br>
+<span class="out">  <span class="hl">show options</span>          Show current module options</span><br>
+<span class="out">  <span class="hl">set</span> &lt;KEY&gt; &lt;value&gt;    Set an option (e.g. set RHOST 192.168.1.5)</span><br>
+<span class="out">  <span class="hl">run</span>                   Execute the loaded module</span><br>
+<span class="out">  <span class="hl">browse</span>                Open target URL in browser</span><br>
+<span class="out">  <span class="hl">back</span>                  Unload current module</span><br>
+<span class="out">  <span class="hl">exit</span>                  Quit Bandito</span><br>
+<span class="blank"></span>
+<span class="prompt">bandito (no module) &gt; </span><span class="cmd">use command_injection.rce</span><br>
+<span class="out g">[+] Module loaded: command_injection.rce</span><br>
+<span class="blank"></span>
+<span class="prompt">bandito (command_injection.rce) &gt; </span><span class="cmd">show options</span><br>
+<span class="blank"></span>
+<span class="out y">  Module Options — command_injection/rce</span><br>
+<span class="out">  ─────────────────────────────────────────────────────</span><br>
+<span class="out">  <span class="hl">RHOST</span>    192.168.1.5    Target DVWA IP address</span><br>
+<span class="out">  <span class="hl">LHOST</span>    &lt;unset&gt;        Your Kali IP (for reverse shell)</span><br>
+<span class="blank"></span>
+<span class="prompt">bandito (command_injection.rce) &gt; </span><span class="cmd">set RHOST 192.168.1.100</span><br>
+<span class="out g">[+] RHOST =&gt; 192.168.1.100</span><br>
+<span class="blank"></span>
+<span class="prompt">bandito (command_injection.rce) &gt; </span><span class="cmd">set LHOST 192.168.1.50</span><br>
+<span class="out g">[+] LHOST =&gt; 192.168.1.50</span><br>
+<span class="blank"></span>
+<span class="prompt">bandito (command_injection.rce) &gt; </span><span class="cmd">run</span><br>
+<span class="out g">[+] Logging into DVWA...</span><br>
+<span class="out g">[+] CSRF token acquired</span><br>
+<span class="out g">[+] Command injection confirmed</span><br>
+<span class="out g">[+] Interactive shell ready. Type commands below.</span><br>
+<span class="out r">shell&gt; </span><span class="cmd">id</span><br>
+<span class="out">uid=33(www-data) gid=33(www-data) groups=33(www-data)</span><br>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Modules -->
+<section id="modules">
+  <div class="section-inner">
+    <p class="sec-eyebrow">What's Included</p>
+    <h2 class="sec-title">Available <em>Modules</em></h2>
+    <p class="sec-sub">Six attack modules covering the major vulnerability classes. Each auto-loads at startup and follows the same use / set / run interface.</p>
+
+    <div class="modules-grid">
+
+      <div class="mod-card reveal-item">
+        <div class="mod-cat">command_injection</div>
+        <span class="mod-status">Active</span>
+        <div class="mod-name">rce</div>
+        <div class="mod-desc">Command injection to full RCE. Opens an interactive shell via injection, then optionally uploads a PHP webshell or auto-deploys a reverse shell with a listener.</div>
+        <div class="mod-commands">
+          <div class="mod-cmd"><span>run</span> &nbsp;— inject &amp; open shell</div>
+          <div class="mod-cmd"><span>upload_webshell</span> &nbsp;— drop shell.php</div>
+          <div class="mod-cmd"><span>upload_revshell</span> &nbsp;— reverse shell + nc listener</div>
+          <div class="mod-cmd"><span>shell</span> &nbsp;— interactive command loop</div>
+        </div>
+      </div>
+
+      <div class="mod-card reveal-item">
+        <div class="mod-cat">xss</div>
+        <span class="mod-status">Active</span>
+        <div class="mod-name">xss_reflected</div>
+        <div class="mod-desc">Reflected XSS payload generation with an HTTP catch server. Opens the DVWA XSS page automatically and generates a payload to paste into the form field.</div>
+        <div class="mod-commands">
+          <div class="mod-cmd"><span>setup</span> &nbsp;— start catch server, open page</div>
+          <div class="mod-cmd"><span>generate</span> &nbsp;— print payload to clipboard</div>
+        </div>
+      </div>
+
+      <div class="mod-card reveal-item">
+        <div class="mod-cat">xss</div>
+        <span class="mod-status">Active</span>
+        <div class="mod-name">xss_stored</div>
+        <div class="mod-desc">Stored XSS cookie stealer targeting the DVWA guestbook. Injects a persistent payload that exfiltrates session cookies to your catch server.</div>
+        <div class="mod-commands">
+          <div class="mod-cmd"><span>setup</span> &nbsp;— start server, open stored XSS page</div>
+          <div class="mod-cmd"><span>generate</span> &nbsp;— print guestbook payload</div>
+        </div>
+      </div>
+
+      <div class="mod-card reveal-item">
+        <div class="mod-cat">sqli</div>
+        <span class="mod-status">Active</span>
+        <div class="mod-name">sqli</div>
+        <div class="mod-desc">Full SQL injection attack chain: logs in, dumps user hashes, then pipes them straight into Hashcat for cracking. Results printed to terminal.</div>
+        <div class="mod-commands">
+          <div class="mod-cmd"><span>run</span> &nbsp;— login → dump hashes → crack</div>
+        </div>
+      </div>
+
+      <div class="mod-card reveal-item">
+        <div class="mod-cat">buffer_overflow</div>
+        <span class="mod-status">Active</span>
+        <div class="mod-name">bof_analysis</div>
+        <div class="mod-desc">Guided buffer overflow analysis chain against Benji's Snack Vault. Steps through fuzzing → pattern creation → offset identification → bad character detection → EIP control verification. Saves results to JSON.</div>
+        <div class="mod-commands">
+          <div class="mod-cmd"><span>run</span> &nbsp;— full guided analysis chain</div>
+          <div class="mod-cmd">saves → <span>analysis_results.json</span></div>
+        </div>
+      </div>
+
+      <div class="mod-card reveal-item">
+        <div class="mod-cat">buffer_overflow</div>
+        <span class="mod-status">Active</span>
+        <div class="mod-name">bof_exploit</div>
+        <div class="mod-desc">Automated exploitation using analysis results. Generates a Meterpreter payload via msfvenom, constructs the exploit buffer, and fires for a shell.</div>
+        <div class="mod-commands">
+          <div class="mod-cmd"><span>run</span> &nbsp;— generate payload + fire exploit</div>
+          <div class="mod-cmd">reads ← <span>analysis_results.json</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Custom Modules -->
+<section id="custom">
+  <div class="section-inner">
+    <p class="sec-eyebrow">Extending Bandito</p>
+    <h2 class="sec-title">Build Your <em>Own</em> Module</h2>
+    <p class="sec-sub">Bandito is fully modular. Drop any <code style="color:var(--red3);">.py</code> file under <code style="color:var(--red3);">modules/</code> and it auto-loads at startup — no config needed.</p>
+
+    <div class="custom-grid">
+
+      <div>
+        <div class="term-block reveal-item">
+          <div class="term-bar">
+            <div class="term-dot r"></div><div class="term-dot y"></div><div class="term-dot g"></div>
+            <div class="term-title-bar">modules/my_module/exploit.py</div>
+          </div>
+          <div class="term-body">
+<span class="comment"># 1. Import the right base class</span><br>
+<span class="out b">from</span> <span class="cmd">base_module</span> <span class="out b">import</span> <span class="hl">BaseModule</span><br>
+<span class="comment"># For DVWA targets, use DVWABase instead:</span><br>
+<span class="comment"># from dvwa_base import DVWABase</span><br>
+<span class="blank"></span>
+<span class="out b">class</span> <span class="hl">MyModule</span>(<span class="cmd">BaseModule</span>):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="out b">def</span> <span class="cmd">__init__</span>(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="out b">super</span>().<span class="cmd">__init__</span>()<br>
+<span class="blank"></span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># 2. Set module identity</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.<span class="hl">name</span> = <span class="out g">"my_module"</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.<span class="hl">description</span> = <span class="out g">"Does something cool"</span><br>
+<span class="blank"></span>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># 3. Define your options</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;self.<span class="hl">options</span> = {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="out g">"TARGET"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="out g">"value"</span>: <span class="out g">""</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="out g">"required"</span>: <span class="out b">True</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="out g">"description"</span>: <span class="out g">"Target IP"</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>
+<span class="blank"></span>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># 4. Implement run()</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span class="out b">def</span> <span class="cmd">run</span>(self):<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;target = self.options[<span class="out g">'TARGET'</span>][<span class="out g">'value'</span>]<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="out b">print</span>(<span class="out g">f"[+] Running against </span>{target}<span class="out g">"</span>)<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="comment"># your logic here</span><br>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div style="display:flex;flex-direction:column;gap:1.25rem;">
+
+          <div style="border:1px solid var(--border);border-left:3px solid var(--red);padding:1.25rem;background:var(--surface);">
+            <div class="step-num" style="font-size:1.5rem;">01</div>
+            <div class="step-title">File structure</div>
+            <div class="step-desc">Create any <code style="color:var(--red3);">.py</code> file anywhere under <code style="color:var(--red3);">modules/</code>. Subdirectories become the module namespace.</div>
+            <code class="step-code">modules/<br>&nbsp;&nbsp;my_category/<br>&nbsp;&nbsp;&nbsp;&nbsp;my_exploit.py &nbsp;← auto-loaded as<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; my_category.my_exploit</code>
+          </div>
+
+          <div style="border:1px solid var(--border);border-left:3px solid var(--red);padding:1.25rem;background:var(--surface);">
+            <div class="step-num" style="font-size:1.5rem;">02</div>
+            <div class="step-title">Base class — which to use</div>
+            <div class="step-desc">Pick your parent class based on your target:</div>
+            <code class="step-code">BaseModule &nbsp;&nbsp;← general purpose<br>DVWABase &nbsp;&nbsp;&nbsp;&nbsp;← auto DVWA login + CSRF</code>
+          </div>
+
+          <div style="border:1px solid var(--border);border-left:3px solid var(--red);padding:1.25rem;background:var(--surface);">
+            <div class="step-num" style="font-size:1.5rem;">03</div>
+            <div class="step-title">Optional overrides</div>
+            <div class="step-desc">Customize behaviour by overriding these methods in your class:</div>
+            <code class="step-code">show_help() &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← custom help text<br>handle_command() &nbsp;← extra CLI commands<br>run() &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;← required: main logic</code>
+          </div>
+
+          <div style="border:1px solid var(--border);border-left:3px solid var(--red);padding:1.25rem;background:var(--surface);">
+            <div class="step-num" style="font-size:1.5rem;">04</div>
+            <div class="step-title">Load it</div>
+            <div class="step-desc">Restart Bandito. Your module appears automatically in <code style="color:var(--red3);">show modules</code> and is available via <code style="color:var(--red3);">use</code>.</div>
+            <code class="step-code">python3 bandito.py<br>[+] Loaded module: my_category.my_exploit</code>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Disclaimer -->
+<section style="padding:3rem;text-align:center;border-top:1px solid var(--border);">
+  <div class="section-inner">
+    <p style="font-size:0.72rem;color:var(--dim);line-height:1.9;max-width:700px;margin:0 auto;">
+      ⚠ &nbsp;EDUCATIONAL USE ONLY. Bandito is a portfolio project demonstrating modular exploit framework design, DVWA attack chains, and Python tooling. Use only against systems you own or have explicit written authorisation to test. Unauthorised use against third-party systems is illegal.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <p>BANDITO FRAMEWORK &nbsp;—&nbsp; Brad Sutton &nbsp;—&nbsp; v1.0</p>
+  <p>
+    <a href="https://github.com/BradJSutt/bandito-framework" target="_blank">github.com/BradJSutt/bandito-framework</a>
+    &nbsp;|&nbsp;
+    <a href="https://bradsutt.github.io" target="_blank">Portfolio</a>
+  </p>
+</footer>
+
+<script>
+// Scroll reveal
+const io = new IntersectionObserver(entries=>{
+  entries.forEach(e=>{ if(e.isIntersecting) e.target.classList.add('vis'); });
+},{threshold:0.1});
+document.querySelectorAll('.reveal-item').forEach((el,i)=>{
+  el.style.transitionDelay=(i%3*0.1)+'s';
+  io.observe(el);
+});
+</script>
+</body>
+</html>
